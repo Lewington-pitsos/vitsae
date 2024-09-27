@@ -1,0 +1,32 @@
+# Local .terraform directories
+.terraform/
+**/.terraform/*
+
+# Terraform state files
+terraform.tfstate
+terraform.tfstate.backup
+
+# State lock file
+.terraform.lock.hcl
+
+# Crash log files
+crash.log
+
+# Ignore override files as they are usually local
+*.tfvars
+*.tfvars.json
+
+# Ignore plan output files (binary and JSON formats)
+*.tfplan
+*.tfplan.json
+
+# Ignore sensitive auto-generated files
+terraform.tfvars
+secret.auto.tfvars
+
+# Ignore any other backup files
+*.backup
+*.bak
+
+# Ignore logs or debugging files
+*.log

@@ -25,21 +25,21 @@ container_cpu         = 1024
 service_desired_count = 2
 
 # EC2 Instance Variables
-instance_type   = "g4dn.xlarge"
+# instance_type   = "g4dn.xlarge"
+instance_type   = "t3.micro"
 key_pair_name   = "my-ssh-key"
 key_pair_public_key_path = "~/.ssh/id_sache.pub"# Path to your existing public key
 
 # Auto Scaling Group Variables
-max_size         = 5
-min_size         = 1
-desired_capacity = 2
+max_size         = 0
+min_size         = 0
+desired_capacity = 0
 
 # Networking Variables
-vpc_id = "vpc-0123456789abcdef0"
+vpc_id = "vpc-02bea51ed45afd15c"
 
 subnet_ids = [
-  "subnet-0123456789abcdef0",
-  "subnet-0fedcba9876543210"
+  "subnet-0d9bd4ef7047caea2",
 ]
 
-my_ip_cidr_block = "203.0.113.0/24"
+my_ip_cidr_block = "172.31.80.0/20"
