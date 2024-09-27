@@ -128,3 +128,9 @@ variable "my_ip_cidr_block" {
   description = "Your IP CIDR block for SSH access (e.g., '203.0.113.0/24')"
   type        = string
 }
+
+variable "dynamodb_table_name" {
+  description = "The name of the DynamoDB table for image hashes."
+  type        = string
+  default     = "image-hashes-table"
+}

@@ -129,7 +129,18 @@ resource "aws_iam_policy" "ecs_task_policy" {
         Action   = "ecr:GetAuthorizationToken"
         Effect   = "Allow"
         Resource = "*"
-      }
+      },
+      {
+        Action   = [
+          "dynamodb:PutItem",
+          "dynamodb:GetItem",
+          "dynamodb:Query",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem"
+        ]
+        Effect   = "Allow"
+        Resource = aws_dynamodb_table.image_hashes.arn
+      },
     ]
   })
 }
@@ -378,4 +389,21 @@ resource "aws_ecr_repository_policy" "ml_ecr_policy" {
       }
     ]
   })
+}
+
+
+resource "aws_dynamodb_table" "image_hashes" {
+  name           = "image-hashes-table"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "image_hash"
+
+  attribute {
+    name = "image_hash"
+    type = "S"
+  }
+
+  tags = {
+    Name        = "ImageHashesTable"
+    Environment = var.environment
+  }
 }
