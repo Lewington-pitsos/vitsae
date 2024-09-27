@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "generate"
+version = "0.1.0"
+description = ""
+authors = ["Louka Ewington-Pitsos <lewingtonpitsos@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+boto3 = "^1.35.28"
+python-terraform = "^0.10.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

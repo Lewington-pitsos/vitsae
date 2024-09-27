@@ -33,3 +33,6 @@ secret.auto.tfvars
 
 
 .commands.sh
+
+vitsae/.credentials.json
+vitsae/pad.py
