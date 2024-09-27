@@ -10,11 +10,6 @@ provider "aws" {
 
 resource "aws_s3_bucket" "model_outputs" {
   bucket = var.bucket_name
-  acl    = "private"
-
-  versioning {
-    enabled = true
-  }
 
   tags = {
     Name        = "Model Outputs Bucket"
@@ -244,8 +239,6 @@ resource "aws_launch_template" "ecs_launch_template" {
   iam_instance_profile {
     name = aws_iam_instance_profile.ecs_instance_profile.name
   }
-
-  user_data = base64encode(data.template_file.user_data.rendered)
 
   instance_market_options {
     market_type = "spot"
