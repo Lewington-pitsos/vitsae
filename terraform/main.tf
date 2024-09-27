@@ -53,20 +53,6 @@ resource "aws_ecr_repository" "ml_ecr" {
 }
 
 #######################################
-# 4. EC2 Key Pair for SSH Access
-#######################################
-
-resource "aws_key_pair" "ecs_key_pair" {
-  key_name   = var.key_pair_name
-  public_key = file(var.key_pair_public_key_path)
-
-  tags = {
-    Name        = "ECS Key Pair"
-    Environment = var.environment
-  }
-}
-
-#######################################
 # 5. ECS Cluster with G6 Spot Instances
 #######################################
 
@@ -234,8 +220,6 @@ resource "aws_launch_template" "ecs_launch_template" {
   image_id      = data.aws_ami.ecs_optimized.id
   instance_type = var.instance_type
 
-  key_name = aws_key_pair.ecs_key_pair.key_name
-
   iam_instance_profile {
     name = aws_iam_instance_profile.ecs_instance_profile.name
   }
@@ -357,7 +341,6 @@ resource "aws_ecs_service" "ml_service" {
   network_configuration {
     subnets          = var.subnet_ids
     security_groups  = [aws_security_group.ecs_security_group.id]
-    assign_public_ip = true
   }
 
   deployment_maximum_percent         = 200

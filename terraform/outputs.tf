@@ -43,16 +43,3 @@ output "ecs_autoscaling_group_name" {
   description = "Name of the ECS Auto Scaling Group"
   value       = aws_autoscaling_group.ecs_autoscaling_group.name
 }
-
-# Key Pair Output
-output "key_pair_name" {
-  description = "Name of the EC2 key pair"
-  value       = aws_key_pair.ecs_key_pair.key_name
-}
-
-# Optionally, output the private key if generated (Not Recommended)
-# output "ecs_private_key" {
-#   description = "Private key for ECS instances (Store securely!)"
-#   value       = tls_private_key.ecs_key.private_key_pem
-#   sensitive   = true
-# }

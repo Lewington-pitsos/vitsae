@@ -30,3 +30,6 @@ secret.auto.tfvars
 
 # Ignore logs or debugging files
 *.log
+
+
+.commands.sh

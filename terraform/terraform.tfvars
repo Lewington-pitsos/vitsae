@@ -27,8 +27,6 @@ service_desired_count = 2
 # EC2 Instance Variables
 # instance_type   = "g4dn.xlarge"
 instance_type   = "t3.micro"
-key_pair_name   = "my-ssh-key"
-key_pair_public_key_path = "~/.ssh/id_sache.pub"# Path to your existing public key
 
 # Auto Scaling Group Variables
 max_size         = 0

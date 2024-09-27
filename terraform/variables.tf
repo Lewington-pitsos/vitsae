@@ -94,17 +94,6 @@ variable "instance_type" {
   default     = "g4dn.xlarge"
 }
 
-variable "key_pair_name" {
-  description = "Name of the EC2 key pair for SSH access"
-  type        = string
-}
-
-variable "key_pair_public_key_path" {
-  description = "Path to the public key file for the EC2 key pair"
-  type        = string
-  default     = "~/.ssh/id_rsa.pub"
-}
-
 # Auto Scaling Group Variables
 variable "max_size" {
   description = "Maximum size of the Auto Scaling Group"
