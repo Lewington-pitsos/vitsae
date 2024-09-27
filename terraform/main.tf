@@ -233,14 +233,6 @@ data "aws_ami" "ecs_optimized" {
   }
 }
 
-# User Data Script for EC2 Instances
-data "template_file" "user_data" {
-  template = file("${path.module}/user_data.sh.tpl")
-  vars = {
-    cluster_name = aws_ecs_cluster.ml_cluster.name
-  }
-}
-
 # Launch Template for EC2 Instances with Spot Market Options
 resource "aws_launch_template" "ecs_launch_template" {
   name_prefix   = "ecs-launch-template-"
