@@ -6,7 +6,15 @@ import time
 from utils import load_credentials
 
 class FileBundler:
-    def __init__(self, watch_dir, upload_threshold, s3_client, s3_bucket, s3_prefix, seconds_to_wait_before_upload=300):
+    def __init__(self, 
+                 watch_dir, 
+                 upload_threshold, 
+                 s3_client, 
+                 s3_bucket, 
+                 s3_prefix, 
+                 table,
+                 seconds_to_wait_before_upload=300
+        ):
         self.file_counts = defaultdict(int)
         self.previous_file_counts = {}
         self.watch_dir = watch_dir
@@ -14,6 +22,7 @@ class FileBundler:
         self.s3_client = s3_client
         self.s3_bucket = s3_bucket
         self.s3_prefix = s3_prefix
+        self.dd_table = table
 
         self.seconds_since_change = {}
         self.seconds_to_wait_before_upload = seconds_to_wait_before_upload
@@ -39,6 +48,19 @@ class FileBundler:
         # Reset the file_counts for the next check
         self.file_counts.clear()
 
+    def mark_as_uploaded(self, prefix):
+        try:
+            response = self.dd_table.put_item(
+                Item={
+                    'batch_id': prefix,
+                    'uploaded': True
+                }
+            )
+            print(f'Marked {prefix} as uploaded.', response)
+        except Exception as e:
+            print(f'Failed to mark {prefix} as uploaded: {e}')
+
+
     def bundle_and_upload_files(self, prefix):
         files_to_bundle = [f for f in os.listdir(self.watch_dir) if f.startswith(prefix)]
         tar_filename = os.path.join(self.watch_dir, f'{prefix}.tar')
@@ -49,6 +71,7 @@ class FileBundler:
                 tar.add(file_path, arcname=file_name)
         
         self.upload_to_s3(tar_filename, prefix)
+        self.mark_as_uploaded(prefix)
 
         os.remove(tar_filename)
         for file_name in files_to_bundle:
@@ -64,30 +87,28 @@ class FileBundler:
         except Exception as e:
             print(f'Failed to upload {tar_filename} to S3: {e}')
 
-    def update_file_counts(self, prefix):
+    def update_file_counts(self):
         for file_name in os.listdir(self.watch_dir):
             if not os.path.isfile(os.path.join(self.watch_dir, file_name)):
                 continue  # Skip directories
 
-            prefix = file_name.split('-part-')[0]
+            prefix = file_name.split('--')[0]
             self.file_counts[prefix] += 1
 
     def finalize(self):
         self.stop = True
-
-        self.update_file_counts()
-
-        for prefix, count in self.file_counts.items():
-            if count > self.upload_threshold:
-                self.bundle_and_upload_files(prefix)
-            
-
 
     def keep_monitoring(self, sleep_time=5):
         try:
             while not self.stop:
                 self.check_directory()
                 time.sleep(sleep_time)  # Wait for 5 seconds before checking again
+
+            self.update_file_counts()
+            for prefix, count in self.file_counts.items():
+                if count > self.upload_threshold:
+                    self.bundle_and_upload_files(prefix)
+
         except KeyboardInterrupt:
             print("Stopping the directory monitoring.")
 

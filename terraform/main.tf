@@ -139,7 +139,7 @@ resource "aws_iam_policy" "ecs_task_policy" {
           "dynamodb:DeleteItem"
         ]
         Effect   = "Allow"
-        Resource = aws_dynamodb_table.image_hashes.arn
+        Resource = aws_dynamodb_table.laion_batches.arn
       },
     ]
   })
@@ -392,13 +392,13 @@ resource "aws_ecr_repository_policy" "ml_ecr_policy" {
 }
 
 
-resource "aws_dynamodb_table" "image_hashes" {
-  name           = "image-hashes-table"
+resource "aws_dynamodb_table" "laion_batches" {
+  name           = var.dynamodb_table_name
   billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "image_hash"
+  hash_key       = "batch_id"
 
   attribute {
-    name = "image_hash"
+    name = "batch_id"
     type = "S"
   }
 

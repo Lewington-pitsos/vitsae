@@ -31,7 +31,15 @@ def initialize_boto3_clients(credentials):
         aws_secret_access_key=credentials['AWS_SECRET'],
         region_name=credentials.get('AWS_REGION', 'us-east-1')
     )
-    return sqs, s3
+    ddb = boto3.resource(
+        'dynamodb',
+        aws_access_key_id=credentials['AWS_ACCESS_KEY_ID'],
+        aws_secret_access_key=credentials['AWS_SECRET'],
+        region_name=credentials.get('AWS_REGION', 'us-east-1')
+    )
+    ddb_table = ddb.Table(credentials.get('TABLE_NAME'))
+
+    return sqs, s3, ddb_table
 
 def receive_message(sqs, queue_url, wait_time=20, max_messages=1):
     """
@@ -67,7 +75,7 @@ def download_parquet(url, hf_token):
         response = requests.get(url, headers=headers, timeout=60)
         response.raise_for_status()
         # Read parquet file into pandas DataFrame
-        pq_id = os.path.basename(url).split('.')[0]
+        pq_id = os.path.basename(url).split('part-')[1].split('-')[0]
         df = pd.read_parquet(BytesIO(response.content))
         return pq_id, df
     except Exception as e:
@@ -83,10 +91,7 @@ def download_image(image_url):
         print(f"Error downloading image from {image_url}: {e}")
         return None
 
-def process_parquet(parquet_id, base_dir, df, max_images_per_tar=30000, concurrency=1000):
-    """
-    Process the DataFrame asynchronously to download images concurrently and create tar files in WebDataset format.
-    """
+def process_parquet(base_dir, df, pq_id, already_processed, max_images_per_tar=30000, concurrency=1000):
     temp_dir = tempfile.mkdtemp()
     loop = asyncio.get_event_loop()
 
@@ -115,7 +120,7 @@ def process_parquet(parquet_id, base_dir, df, max_images_per_tar=30000, concurre
                         "prediction": row.get('prediction')
                     }
 
-                    image_filename = os.path.join(base_dir, f"{prefix}-{parquet_id}-{index}.jpg")
+                    image_filename = os.path.join(base_dir, f"{prefix}--{index}.jpg")
                     with open(image_filename, 'wb') as f:
                         f.write(image_content)
                     with open(image_filename.replace('.jpg', '.json'), 'w') as f:
@@ -129,20 +134,23 @@ def process_parquet(parquet_id, base_dir, df, max_images_per_tar=30000, concurre
         
         return False  # Indicate that the image was not processed
 
-    async def process_images(base_dir, batch_size):
+    async def process_images(base_dir, pq_id, batch_size, already_processed):
         start_idx = 0
         next_idx = start_idx + batch_size
-        prefix = f"{start_idx}-{next_idx}"
+        prefix = f"{pq_id}-{start_idx}-{next_idx}"
         semaphore = asyncio.Semaphore(concurrency)
         
         async with aiohttp.ClientSession() as session:
             start = time.time()
             tasks = set()
             for index, row in df.iterrows():
+                if prefix in already_processed:
+                    continue
+
                 if index >= next_idx:
                     start_idx = next_idx
                     next_idx = start_idx + batch_size
-                    prefix = f"{start_idx}-{next_idx}"
+                    prefix = f"{pq_id}-{start_idx}-{next_idx}"
 
                 async with semaphore:
                     tasks.add(asyncio.create_task(download_image(session, base_dir, prefix, index, row)))
@@ -158,7 +166,7 @@ def process_parquet(parquet_id, base_dir, df, max_images_per_tar=30000, concurre
             if tasks:
                 await asyncio.gather(*tasks)
 
-    loop.run_until_complete(process_images(base_dir, max_images_per_tar))
+    loop.run_until_complete(process_images(base_dir, pq_id, max_images_per_tar, already_processed))
 
     # Clean up the temporary directory and its contents
     try:
@@ -169,12 +177,26 @@ def process_parquet(parquet_id, base_dir, df, max_images_per_tar=30000, concurre
     except OSError as e:
         print(f"Error removing temporary directory: {e}")
 
+def get_already_processed_batches(ddb_table, pq_id):
+    try:
+        # query all keys which begin with the pq id
+        response = ddb_table.query(
+            KeyConditionExpression='begins_with(batch_id, :prefix)',
+            ExpressionAttributeValues={
+                ':prefix': pq_id
+            }
+        )
+        return set([item.get('batch_id') for item in response.get('Items', [])])
+    except Exception as e:
+        print(f"Error retrieving already processed batches from DynamoDB: {e}")
+        return []
+
 def main():
     """
     Main function to continuously process messages from SQS.
     """
     credentials = load_credentials()
-    sqs, s3 = initialize_boto3_clients(credentials)
+    sqs, s3, ddb_table = initialize_boto3_clients(credentials)
 
     # Retrieve SQS queue URL and S3 bucket name from credentials
     sqs_queue_url = credentials.get('SQS_QUEUE_URL')
@@ -191,7 +213,7 @@ def main():
     if not os.path.exists(base_dir):
         os.makedirs(base_dir)
     
-    uploader = FileBundler(base_dir, 1000, s3, s3_bucket_name, 'wds2', seconds_to_wait_before_upload=30)
+    uploader = FileBundler(base_dir, 1000, s3, s3_bucket_name, 'wds2', ddb_table, seconds_to_wait_before_upload=10)
     t = Thread(target=uploader.keep_monitoring)
     t.start()
     
@@ -211,8 +233,10 @@ def main():
 
             pq_id, df = download_parquet(message_body, hf_token)
 
+            already_processed = get_already_processed_batches(ddb_table, pq_id)        
+
             if df is not None:
-                process_parquet(pq_id, base_dir, df, s3, s3_bucket_name)
+                process_parquet(pq_id, df, base_dir, pq_id, already_processed)
                 delete_message(sqs, sqs_queue_url, message['ReceiptHandle'])
                 print(f"Deleted message from SQS: {message.get('MessageId')}")
             else:

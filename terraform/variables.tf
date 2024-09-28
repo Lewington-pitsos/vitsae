@@ -132,5 +132,5 @@ variable "my_ip_cidr_block" {
 variable "dynamodb_table_name" {
   description = "The name of the DynamoDB table for image hashes."
   type        = string
-  default     = "image-hashes-table"
+  default     = "laion-batches"
 }
