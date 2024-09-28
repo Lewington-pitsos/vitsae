@@ -17,4 +17,4 @@ def test_process_parquet():
         region_name=credentials.get('AWS_REGION', 'us-east-1')
     )
     
-    process_parquet(parquet_id, df, s3_client, 'vit-sae-activations', max_images_per_tar=50)
+    process_parquet(parquet_id, df, s3_client, 'vit-sae-activations', max_images_per_tar=50, concurrency=50)

@@ -1,4 +1,6 @@
+from email.mime import image
 import json
+from re import T
 import boto3
 import requests
 import pandas as pd
@@ -8,6 +10,9 @@ import sys
 import time
 import tarfile
 import tempfile
+import asyncio
+import aiohttp
+import aiofiles
 
 
 def load_credentials(credentials_path='.credentials.json'):
@@ -100,93 +105,120 @@ def upload_to_s3(s3, bucket_name, image_content, s3_key):
     except Exception as e:
         print(f"Error uploading image to S3: {s3_key}. Error: {e}")
 
-def process_parquet(parquet_id, df, s3, bucket_name, max_images_per_tar=30_000, tar_file_index=0):
-    image_count = 0
+
+def process_parquet(parquet_id, df, s3, bucket_name, max_images_per_tar=30000, tar_file_index=0, concurrency=1000):
+    """
+    Process the DataFrame asynchronously to download images concurrently and create tar files in WebDataset format.
+    """
     temp_dir = tempfile.mkdtemp()
-    
-    def create_tar_file(tar_file_index):
+
+    loop = asyncio.get_event_loop()
+
+    async def create_tar_file(tar_file_index):
         tar_filename = f"{temp_dir}/{parquet_id}-{tar_file_index * max_images_per_tar}-{(tar_file_index + 1) * max_images_per_tar}.tar"
         tar_file = tarfile.open(tar_filename, "w")
+        return tar_file, tar_filename, tar_file_index + 1
 
-        return tar_file, tar_filename, tar_file_index+1
-
-
-    def add_image_to_tar(tar_file, image_content, image_filename, metadata):
-        image_path = os.path.join(temp_dir, image_filename)
-        with open(image_path, "wb") as img_file:
-            img_file.write(image_content)
-
-        tar_file.add(image_path, arcname=f"{image_filename}")
-        
-        # Add metadata as a separate file in the tar archive
-        metadata_content = json.dumps(metadata).encode('utf-8')
-        metadata_filename = f"{os.path.splitext(image_filename)[0]}.json"
-        metadata_path = os.path.join(temp_dir, metadata_filename)
-        with open(metadata_path, "wb") as meta_file:
-            meta_file.write(metadata_content)
-        tar_file.add(metadata_path, arcname=metadata_filename)
-
-    def close_and_upload_tar(tar_file, tar_filename):
+    async def close_and_upload_tar(tar_file, tar_filename):
         if tar_file:
             tar_file.close()
-            
             s3_key = os.path.basename(tar_filename)
             try:
-                with open(tar_filename, "rb") as f:
+                with open(tar_filename, 'rb') as f:
                     s3.upload_fileobj(f, bucket_name, f"webdataset/{s3_key}")
                 print(f"Uploaded {s3_key} to S3.")
             except Exception as e:
                 print(f"Error uploading {s3_key} to S3: {e}")
-            
             os.remove(tar_filename)
 
-    tar_file, tar_filename, tar_file_index = create_tar_file(tar_file_index)  # Start with the first tar file
-
-    for index, row in df.iterrows():
+    async def fetch_and_process_image(session, index, row, tar_file):
         image_url = row.get('URL')
         if not image_url:
             print(f"No URL found in row {index}. Skipping.")
-            continue
+            return False  # Indicate that this image was not processed
+
+        try:
+            async with session.get(image_url, timeout=30) as response:
+                if response.status == 200:
+                    image_content = await response.read()
+                    metadata = {
+                        "URL": image_url,
+                        "hash": row.get('hash'),
+                        "TEXT": row.get('TEXT'),
+                        "WIDTH": row.get('WIDTH'),
+                        "HEIGHT": row.get('HEIGHT'),
+                        "similarity": row.get('similarity'),
+                        "LANGUAGE": row.get('LANGUAGE'),
+                        "pwatermark": row.get('pwatermark'),
+                        "punsafe": row.get('punsafe'),
+                        "ENG TEXT": row.get('ENG TEXT'),
+                        "__index_level_0__": row.get('__index_level_0__'),
+                        "prediction": row.get('prediction')
+                    }
+
+                    image_filename = f"{parquet_id}-{index}.jpg"
+                    await add_image_to_tar(tar_file, image_content, image_filename, metadata)
+                    return True  # Indicate that the image was successfully processed
+        except Exception as e:
+            print(f"Exception while downloading {image_url}: {e}")
         
-        # Generate hash of the image URL to use as a unique identifier
-        image_content = download_image(image_url)
-        if image_content:
-            
-            metadata = {
-                "URL": image_url,
-                "hash": row.get('hash'),
-                "TEXT": row.get('TEXT'),
-                "WIDTH": row.get('WIDTH'),
-                "HEIGHT": row.get('HEIGHT'),
-                "similarity": row.get('similarity'),
-                "LANGUAGE": row.get('LANGUAGE'),
-                "pwatermark": row.get('pwatermark'),
-                "punsafe": row.get('punsafe'),
-                "ENG TEXT": row.get('ENG TEXT'),
-                "__index_level_0__": row.get('__index_level_0__'),
-                "prediction": row.get('prediction')
-            }
+        return False  # Indicate that the image was not processed
 
-            image_filename = f"{parquet_id}-{index}.jpg"
-            add_image_to_tar(tar_file, image_content, image_filename, metadata)
+    async def add_image_to_tar(tar_file, image_content, image_filename, metadata):
+        # Save image content to a temporary file asynchronously
+        image_path = os.path.join(temp_dir, image_filename)
+        async with aiofiles.open(image_path, 'wb') as img_file:
+            await img_file.write(image_content)
 
-            image_count += 1
+        # Add image to tar file
+        tar_file.add(image_path, arcname=image_filename)
 
-            if image_count >= max_images_per_tar:
-                close_and_upload_tar(tar_file, tar_filename)
-                tar_file, tar_filename, tar_file_index = create_tar_file(tar_file_index)  # Start a new tar file
-                image_count = 0
-        else:
-            print(f"Failed to download image from {image_url}. Skipping to next.")
+        # Save metadata to a temporary file asynchronously
+        metadata_content = json.dumps(metadata).encode('utf-8')
+        metadata_filename = f"{os.path.splitext(image_filename)[0]}.json"
+        metadata_path = os.path.join(temp_dir, metadata_filename)
+        async with aiofiles.open(metadata_path, 'wb') as meta_file:
+            await meta_file.write(metadata_content)
+        tar_file.add(metadata_path, arcname=metadata_filename)
 
-    if image_count > 0:
-        close_and_upload_tar(tar_file, tar_filename)
+    async def process_images(tar_file_index):
+        tar_file, tar_filename, tar_file_index = await create_tar_file(tar_file_index)
+        url_count = 0
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for index, row in df.iterrows():
+                tasks.append(fetch_and_process_image(session, index, row, tar_file))
 
+                if len(tasks) >= concurrency:  # Adjust concurrency limit as needed
+                    results = await asyncio.gather(*tasks)
+                    url_count += sum(results)  # Count the number of successfully processed images
+                    tasks = []
+
+                if url_count >= max_images_per_tar:
+                    await asyncio.gather(*tasks)  # Ensure all tasks are completed
+                    tasks = []
+                    print('Uploading tar file to S3...')
+                    await close_and_upload_tar(tar_file, tar_filename)
+                    tar_file, tar_filename, tar_file_index = await create_tar_file(tar_file_index)
+                    url_count = 0
+
+            if tasks:
+                results = await asyncio.gather(*tasks)
+                url_count += sum(results)
+
+            if url_count > 0:
+                await close_and_upload_tar(tar_file, tar_filename)
+
+    loop.run_until_complete(process_images(tar_file_index))
+
+    # Clean up the temporary directory and its contents
     try:
+        for filename in os.listdir(temp_dir):
+            file_path = os.path.join(temp_dir, filename)
+            os.remove(file_path)
         os.rmdir(temp_dir)
     except OSError as e:
         print(f"Error removing temporary directory: {e}")
-
 
 def main():
     """
