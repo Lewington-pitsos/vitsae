@@ -5,7 +5,7 @@ import boto3
 
 def test_process_parquet():
     parquet_id = 'part-00000-00478b7a-941e-4176-b569-25f4be656991-c000'
-    df = pd.read_csv('cruft/df.csv', nrows=3000)
+    df = pd.read_csv('cruft/df.csv', nrows=400)
 
     with open('.credentials.json') as f:
         credentials = json.load(f)
@@ -17,4 +17,4 @@ def test_process_parquet():
         region_name=credentials.get('AWS_REGION', 'us-east-1')
     )
     
-    process_parquet(parquet_id, df, s3_client, 'vit-sae-activations', max_images_per_tar=50, concurrency=50)
+    process_parquet(parquet_id, df, max_images_per_tar=70, concurrency=200)
