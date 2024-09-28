@@ -36,3 +36,7 @@ secret.auto.tfvars
 
 vitsae/.credentials.json
 vitsae/pad.py
+vitsae/cruft
+
+
+**/__pycache__/

@@ -12,6 +12,7 @@ python-terraform = "^0.10.1"
 requests = "^2.32.3"
 pandas = "^2.2.3"
 pyarrow = "^17.0.0"
+pytest = "^8.3.3"
 
 
 [build-system]
