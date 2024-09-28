@@ -1,3 +1,5 @@
+
+from threading import Thread
 import json
 import boto3
 import requests
@@ -11,6 +13,7 @@ import asyncio
 import aiohttp
 
 from utils import load_credentials
+from uploadwds import FileBundler
 
 def initialize_boto3_clients(credentials):
     """
@@ -80,7 +83,7 @@ def download_image(image_url):
         print(f"Error downloading image from {image_url}: {e}")
         return None
 
-def process_parquet(parquet_id, df, max_images_per_tar=30000, concurrency=1000):
+def process_parquet(parquet_id, base_dir, df, max_images_per_tar=30000, concurrency=1000):
     """
     Process the DataFrame asynchronously to download images concurrently and create tar files in WebDataset format.
     """
@@ -155,9 +158,6 @@ def process_parquet(parquet_id, df, max_images_per_tar=30000, concurrency=1000):
             if tasks:
                 await asyncio.gather(*tasks)
 
-    base_dir = 'cruft/images'
-    if not os.path.exists(base_dir):
-        os.makedirs(base_dir)
     loop.run_until_complete(process_images(base_dir, max_images_per_tar))
 
     # Clean up the temporary directory and its contents
@@ -186,6 +186,16 @@ def main():
         print("Error: 'SQS_QUEUE_URL' and 'S3_BUCKET_NAME' must be set in the credentials file.")
         sys.exit(1)
 
+    
+    base_dir = 'cruft/images'
+    if not os.path.exists(base_dir):
+        os.makedirs(base_dir)
+    
+    uploader = FileBundler(base_dir, 1000, s3, s3_bucket_name, 'wds2', seconds_to_wait_before_upload=30)
+    t = Thread(target=uploader.keep_monitoring)
+    t.start()
+    
+
     print(f"Starting to process messages from SQS queue: {sqs_queue_url}")
     while True:
         messages = receive_message(sqs, sqs_queue_url)
@@ -202,11 +212,14 @@ def main():
             pq_id, df = download_parquet(message_body, hf_token)
 
             if df is not None:
-                process_parquet(pq_id, df, s3, s3_bucket_name)
+                process_parquet(pq_id, base_dir, df, s3, s3_bucket_name)
                 delete_message(sqs, sqs_queue_url, message['ReceiptHandle'])
                 print(f"Deleted message from SQS: {message.get('MessageId')}")
             else:
                 print(f"Failed to process parquet file from URL: {message_body}. Message not deleted for retry.")
+
+    uploader.finalize()
+    t.join()
 
 if __name__ == "__main__":
     main()

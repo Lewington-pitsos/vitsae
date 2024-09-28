@@ -14,19 +14,15 @@ class FileBundler:
         self.s3_client = s3_client
         self.s3_bucket = s3_bucket
         self.s3_prefix = s3_prefix
-        
+
         self.seconds_since_change = {}
         self.seconds_to_wait_before_upload = seconds_to_wait_before_upload
 
+        self.stop = False
+
     def check_directory(self):
         print(f'Checking directory {self.watch_dir} for files...')
-        # Scan the directory for files and update the counts
-        for file_name in os.listdir(self.watch_dir):
-            if not os.path.isfile(os.path.join(self.watch_dir, file_name)):
-                continue  # Skip directories
-
-            prefix = file_name.split('-part-')[0]
-            self.file_counts[prefix] += 1
+        self.update_file_counts()
 
         for prefix, count in self.file_counts.items():
             if count == self.previous_file_counts.get(prefix, 0):
@@ -58,7 +54,6 @@ class FileBundler:
         for file_name in files_to_bundle:
             os.remove(os.path.join(self.watch_dir, file_name))
 
-        # Reset the count for this prefix
         self.previous_file_counts[prefix] = 0
 
     def upload_to_s3(self, tar_filename, prefix):
@@ -68,6 +63,33 @@ class FileBundler:
             print(f'Successfully uploaded {tar_filename} to s3://{self.s3_bucket}/{s3_key}')
         except Exception as e:
             print(f'Failed to upload {tar_filename} to S3: {e}')
+
+    def update_file_counts(self, prefix):
+        for file_name in os.listdir(self.watch_dir):
+            if not os.path.isfile(os.path.join(self.watch_dir, file_name)):
+                continue  # Skip directories
+
+            prefix = file_name.split('-part-')[0]
+            self.file_counts[prefix] += 1
+
+    def finalize(self):
+        self.stop = True
+
+        self.update_file_counts()
+
+        for prefix, count in self.file_counts.items():
+            if count > self.upload_threshold:
+                self.bundle_and_upload_files(prefix)
+            
+
+
+    def keep_monitoring(self, sleep_time=5):
+        try:
+            while not self.stop:
+                self.check_directory()
+                time.sleep(sleep_time)  # Wait for 5 seconds before checking again
+        except KeyboardInterrupt:
+            print("Stopping the directory monitoring.")
 
 if __name__ == "__main__":
     s3_prefix = 'wds/'
@@ -84,9 +106,4 @@ if __name__ == "__main__":
 
     file_bundler = FileBundler(watch_dir, file_count_threshold, s3, credentials['S3_BUCKET_NAME'], s3_prefix)
     
-    try:
-        while True:
-            file_bundler.check_directory()
-            time.sleep(5)  # Wait for 5 seconds before checking again
-    except KeyboardInterrupt:
-        print("Stopping the directory monitoring.")
+    file_bundler.keep_monitoring()
