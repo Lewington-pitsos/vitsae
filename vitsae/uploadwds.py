@@ -6,7 +6,7 @@ import time
 from utils import load_credentials
 
 class FileBundler:
-    def __init__(self, watch_dir, upload_threshold, s3_client, s3_bucket, s3_prefix):
+    def __init__(self, watch_dir, upload_threshold, s3_client, s3_bucket, s3_prefix, seconds_to_wait_before_upload=300):
         self.file_counts = defaultdict(int)
         self.previous_file_counts = {}
         self.watch_dir = watch_dir
@@ -14,6 +14,9 @@ class FileBundler:
         self.s3_client = s3_client
         self.s3_bucket = s3_bucket
         self.s3_prefix = s3_prefix
+        
+        self.seconds_since_change = {}
+        self.seconds_to_wait_before_upload = seconds_to_wait_before_upload
 
     def check_directory(self):
         print(f'Checking directory {self.watch_dir} for files...')
@@ -25,11 +28,15 @@ class FileBundler:
             prefix = file_name.split('-part-')[0]
             self.file_counts[prefix] += 1
 
-        # Process files based on their counts
         for prefix, count in self.file_counts.items():
             if count == self.previous_file_counts.get(prefix, 0):
-                if count > self.upload_threshold:
-                    self.bundle_and_upload_files(prefix)
+                if prefix in self.seconds_since_change:
+                    if count > self.upload_threshold and time.time() - self.seconds_since_change.get(prefix, 0) > self.seconds_to_wait_before_upload:
+                        self.bundle_and_upload_files(prefix)
+                else:
+                    self.seconds_since_change[prefix] = time.time()
+            else:
+                self.seconds_since_change[prefix] = time.time()
 
         # Update previous counts for the next iteration
         self.previous_file_counts = self.file_counts.copy()
