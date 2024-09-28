@@ -15,6 +15,8 @@ resource "aws_s3_bucket" "model_outputs" {
     Name        = "Model Outputs Bucket"
     Environment = var.environment
   }
+
+  force_destroy = true
 }
 
 #######################################
