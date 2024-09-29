@@ -191,7 +191,7 @@ def get_already_processed_batches(ddb_table, pq_id):
         print(f"Error retrieving already processed batches from DynamoDB: {e}")
         return []
 
-def main():
+def generate_webdatasets():
     """
     Main function to continuously process messages from SQS.
     """
@@ -247,4 +247,4 @@ def main():
     t.join()
 
 if __name__ == "__main__":
-    main()
+    generate_webdatasets()
