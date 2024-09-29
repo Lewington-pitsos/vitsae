@@ -49,11 +49,14 @@ variable "delay_seconds" {
   default     = 0
 }
 
-# ECR Variables
-variable "ecr_repository_name" {
+variable "file_ecr_url" {
   description = "Name of the ECR repository for Docker images"
   type        = string
-  default     = "ml-ecr-repo"
+}
+
+variable "file_ecr_arn" {
+  description = "Name of the ECR repository for Docker images"
+  type        = string
 }
 
 # ECS Cluster Variables

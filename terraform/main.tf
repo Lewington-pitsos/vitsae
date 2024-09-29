@@ -37,24 +37,6 @@ resource "aws_sqs_queue" "parquet_file_queue" {
 }
 
 #######################################
-# 3. ECR Repository for Docker Images
-#######################################
-
-resource "aws_ecr_repository" "ml_ecr" {
-  name                 = var.ecr_repository_name
-  image_tag_mutability = "MUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  tags = {
-    Name        = "ML ECR Repository"
-    Environment = var.environment
-  }
-}
-
-#######################################
 # 5. ECS Cluster with G6 Spot Instances
 #######################################
 
@@ -125,7 +107,7 @@ resource "aws_iam_policy" "ecs_task_policy" {
           "ecr:BatchCheckLayerAvailability"
         ]
         Effect   = "Allow"
-        Resource = aws_ecr_repository.ml_ecr.arn
+        Resource = var.file_ecr_arn
       },
       {
         Action   = "ecr:GetAuthorizationToken"
@@ -302,7 +284,7 @@ resource "aws_ecs_task_definition" "ml_task" {
   container_definitions = jsonencode([
     {
       name      = "ml-container"
-      image     = "${aws_ecr_repository.ml_ecr.repository_url}:latest"
+      image     = "${var.file_ecr_url}:latest"
       essential = true
       memory    = var.container_memory
       cpu       = var.container_cpu
@@ -367,32 +349,6 @@ resource "aws_ecs_service" "ml_service" {
     aws_cloudwatch_log_group.ecs_log_group
   ]
 }
-
-# ECR Repository Policy (Optional: To control access)
-resource "aws_ecr_repository_policy" "ml_ecr_policy" {
-  repository = aws_ecr_repository.ml_ecr.name
-
-  policy = jsonencode({
-    Version = "2008-10-17",
-    Statement = [
-      {
-        Sid       = "AllowPushPull",
-        Effect    = "Allow",
-        Principal = "*",
-        Action    = [
-          "ecr:GetDownloadUrlForLayer",
-          "ecr:BatchGetImage",
-          "ecr:BatchCheckLayerAvailability",
-          "ecr:PutImage",
-          "ecr:InitiateLayerUpload",
-          "ecr:UploadLayerPart",
-          "ecr:CompleteLayerUpload"
-        ]
-      }
-    ]
-  })
-}
-
 
 resource "aws_dynamodb_table" "laion_batches" {
   name           = var.dynamodb_table_name

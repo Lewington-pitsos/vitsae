@@ -17,12 +17,6 @@ output "sqs_queue_arn" {
   value       = aws_sqs_queue.parquet_file_queue.arn
 }
 
-# ECR Repository Outputs
-output "ecr_repository_url" {
-  description = "URL of the ECR repository"
-  value       = aws_ecr_repository.ml_ecr.repository_url
-}
-
 # ECS Cluster Outputs
 output "ecs_cluster_id" {
   description = "ID of the ECS cluster"

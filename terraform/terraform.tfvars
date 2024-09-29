@@ -14,9 +14,6 @@ message_retention    = 345600
 receive_wait_time    = 0
 delay_seconds        = 0
 
-# ECR Variables
-ecr_repository_name  = "vit-sae-ecr-repo"
-
 # ECS Cluster Variables
 cluster_name          = "vit-sae-ecs-cluster"
 docker_image          = "" # Will be set dynamically
@@ -41,3 +38,6 @@ subnet_ids = [
 ]
 
 my_ip_cidr_block = "172.31.80.0/20"
+
+file_ecr_arn = ""
+file_ecr_url = ""
