@@ -24,6 +24,7 @@ crash.log
 terraform.tfvars
 secret.auto.tfvars
 
+**/.terraform*
 # Ignore any other backup files
 *.backup
 *.bak

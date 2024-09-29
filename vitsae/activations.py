@@ -14,6 +14,7 @@ import aiohttp
 
 from utils import load_credentials
 from uploadwds import FileBundler
+from interruption import InterruptionHandler
 
 def initialize_boto3_clients(credentials):
     """
@@ -217,7 +218,6 @@ def main():
     t = Thread(target=uploader.keep_monitoring)
     t.start()
     
-
     print(f"Starting to process messages from SQS queue: {sqs_queue_url}")
     while True:
         messages = receive_message(sqs, sqs_queue_url, wait_time=60)
@@ -227,6 +227,8 @@ def main():
 
         for message in messages:
             message_body = message['Body']
+            ih = InterruptionHandler(message, sqs) # adds the pq message back into the queue if the spot instance is interrupted
+            ih.start_listening()
 
             print(f"Processing parquet file URL: {message_body}")
 
@@ -237,6 +239,7 @@ def main():
             if df is not None:
                 process_parquet(pq_id, df, base_dir, pq_id, already_processed)
                 delete_message(sqs, sqs_queue_url, message['ReceiptHandle'])
+                ih.stop_listening() # the parquet has been completed, we never want to add it back to the queue now.
                 print(f"Deleted message from SQS: {message.get('MessageId')}")
             else:
                 print(f"Failed to process parquet file from URL: {message_body}. Message not deleted for retry.")
