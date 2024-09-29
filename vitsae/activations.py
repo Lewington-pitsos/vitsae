@@ -41,7 +41,7 @@ def initialize_boto3_clients(credentials):
 
     return sqs, s3, ddb_table
 
-def receive_message(sqs, queue_url, wait_time=20, max_messages=1):
+def receive_message(sqs, queue_url, wait_time=30, max_messages=1):
     """
     Receive messages from the specified SQS queue.
     """
@@ -220,11 +220,10 @@ def main():
 
     print(f"Starting to process messages from SQS queue: {sqs_queue_url}")
     while True:
-        messages = receive_message(sqs, sqs_queue_url)
+        messages = receive_message(sqs, sqs_queue_url, wait_time=60)
         if not messages:
-            print("No messages available. Waiting...")
-            time.sleep(10)  # Wait before checking for new messages
-            continue
+            print("No messages available for 60 seconds terminating")
+            break
 
         for message in messages:
             message_body = message['Body']
