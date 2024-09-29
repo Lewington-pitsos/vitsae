@@ -13,3 +13,5 @@ for i in {00000..00127}; do wget --header="Authorization: Bearer $HF_TOKEN" http
 
 terraform output ecr_repository_arn
 terraform output ecr_repository_url
+
+aws ecr list-images --repository-name file-ecr --region us-east-1

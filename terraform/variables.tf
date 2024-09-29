@@ -94,7 +94,7 @@ variable "service_desired_count" {
 variable "instance_type" {
   description = "EC2 instance type (e.g., g4dn.xlarge for GPU instances)"
   type        = string
-  default     = "g4dn.xlarge"
+  default     = "t2.small"
 }
 
 # Auto Scaling Group Variables

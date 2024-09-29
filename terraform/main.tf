@@ -53,8 +53,8 @@ resource "aws_ecs_cluster" "ml_cluster" {
 # IAM Roles and Policies
 
 ## IAM Role for ECS Task Execution
-resource "aws_iam_role" "ecs_task_execution_role" {
-  name = "ecsTaskExecutionRole"
+resource "aws_iam_role" "ecs_interface_role" {
+  name = "ecsInterfaceRole"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -74,8 +74,8 @@ resource "aws_iam_role" "ecs_task_execution_role" {
   }
 }
 
-resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy_attachment" {
-  role       = aws_iam_role.ecs_task_execution_role.name
+resource "aws_iam_role_policy_attachment" "ecs_interface_role_policy_attachment" {
+  role       = aws_iam_role.ecs_interface_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
@@ -130,13 +130,13 @@ resource "aws_iam_policy" "ecs_task_policy" {
 }
 
 resource "aws_iam_role_policy_attachment" "ecs_task_policy_attachment" {
-  role       = aws_iam_role.ecs_task_execution_role.name
+  role       = aws_iam_role.ecs_interface_role.name
   policy_arn = aws_iam_policy.ecs_task_policy.arn
 }
 
 ## IAM Role for ECS Instances
 resource "aws_iam_role" "ecs_instance_role" {
-  name = "ecsInstanceRole"
+  name = "ecsInstanceRole2"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -278,8 +278,8 @@ resource "aws_ecs_task_definition" "ml_task" {
   family                   = "ml_task"
   network_mode             = "awsvpc"
   requires_compatibilities = ["EC2"]
-  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn            = aws_iam_role.ecs_task_execution_role.arn
+  execution_role_arn       = aws_iam_role.ecs_interface_role.arn
+  task_role_arn            = aws_iam_role.ecs_interface_role.arn
 
   container_definitions = jsonencode([
     {

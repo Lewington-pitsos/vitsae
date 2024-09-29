@@ -1,4 +1,4 @@
-from activations import generate_webdatasets
+from vitsae.generatewds import generate_webdatasets
 
 
 if __name__ == "__main__":

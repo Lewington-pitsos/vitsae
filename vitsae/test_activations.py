@@ -2,7 +2,7 @@ import time
 import os
 from uploadwds import FileBundler
 from utils import load_credentials
-from activations import process_parquet, initialize_boto3_clients
+from vitsae.generatewds import process_parquet, initialize_boto3_clients
 import pandas as pd
 from threading import Thread
 

@@ -219,7 +219,7 @@ def generate_webdatasets():
     
     print(f"Starting to process messages from SQS queue: {sqs_queue_url}")
     while True:
-        messages = receive_message(sqs, sqs_queue_url, wait_time=60)
+        messages = receive_message(sqs, sqs_queue_url, wait_time=60 * 5)
         if not messages:
             print("No messages available for 60 seconds terminating")
             break
