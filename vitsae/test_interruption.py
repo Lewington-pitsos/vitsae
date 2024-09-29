@@ -1,17 +1,10 @@
 import pytest
-from unittest import mock
 from unittest.mock import MagicMock, patch
 import threading
 import time
 import requests
 
 from interruption import InterruptionHandler, check_for_interruption
-
-# Assuming the code to be tested is in a module named `interruption_handler`
-# from interruption_handler import check_for_interruption, InterruptionHandler
-
-
-# ------------------ Unit Tests Below ------------------
 
 @pytest.fixture
 def mock_sqs_client():

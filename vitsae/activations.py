@@ -1,4 +1,3 @@
-
 from threading import Thread
 import json
 import boto3
