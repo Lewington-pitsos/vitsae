@@ -125,6 +125,18 @@ resource "aws_iam_policy" "ecs_task_policy" {
         Effect   = "Allow"
         Resource = aws_dynamodb_table.laion_batches.arn
       },
+      {
+        Effect   = "Allow"
+        Action   = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
+          aws_secretsmanager_secret.hf_token.arn,
+          aws_secretsmanager_secret.aws_access_key_id.arn,
+          aws_secretsmanager_secret.aws_secret.arn,
+        ]
+      }
     ]
   })
 }
@@ -273,7 +285,6 @@ resource "aws_autoscaling_group" "ecs_autoscaling_group" {
   }
 }
 
-# ECS Task Definition
 resource "aws_ecs_task_definition" "ml_task" {
   family                   = "ml_task"
   network_mode             = "awsvpc"
@@ -288,14 +299,30 @@ resource "aws_ecs_task_definition" "ml_task" {
       essential = true
       memory    = var.container_memory
       cpu       = var.container_cpu
-      environment = [
+      secrets = [
         {
-          name  = "SQS_QUEUE_URL"
-          value = aws_sqs_queue.parquet_file_queue.url
+          name      = "HF_TOKEN"
+          valueFrom = aws_secretsmanager_secret.hf_token.arn
         },
         {
-          name  = "S3_BUCKET_NAME"
-          value = aws_s3_bucket.model_outputs.bucket
+          name      = "AWS_ACCESS_KEY_ID"
+          valueFrom = aws_secretsmanager_secret.aws_access_key_id.arn
+        },
+        {
+          name      = "AWS_SECRET"
+          valueFrom = aws_secretsmanager_secret.aws_secret.arn
+        },
+        {
+          name      = "SQS_QUEUE_URL"
+          valueFrom = aws_secretsmanager_secret.parquet_file_queue_url.arn
+        },
+        {
+          name      = "S3_BUCKET_NAME"
+          valueFrom = aws_secretsmanager_secret.model_outputs_bucket_name.arn
+        },
+        {
+          name      = "TABLE_NAME"
+          valueFrom = aws_secretsmanager_secret.table_name.arn
         }
       ]
       logConfiguration = {
@@ -364,4 +391,101 @@ resource "aws_dynamodb_table" "laion_batches" {
     Name        = "ImageHashesTable"
     Environment = var.environment
   }
+}
+
+
+
+#######################################
+# 6. Secrets Manager for Sensitive Env Vars
+#######################################
+
+resource "aws_secretsmanager_secret" "hf_token" {
+  name        = "${var.environment}-hf-token"
+  description = "HF_TOKEN for ECS tasks"
+  
+  tags = {
+    Environment = var.environment
+    Name        = "HF_TOKEN Secret"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "hf_token_version" {
+  secret_id     = aws_secretsmanager_secret.hf_token.id
+  secret_string = jsonencode({ HF_TOKEN = var.hf_token })
+}
+
+resource "aws_secretsmanager_secret" "aws_access_key_id" {
+  name        = "${var.environment}-aws-access-key-id"
+  description = "AWS_ACCESS_KEY_ID for ECS tasks"
+  
+  tags = {
+    Environment = var.environment
+    Name        = "AWS_ACCESS_KEY_ID Secret"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "aws_access_key_id_version" {
+  secret_id     = aws_secretsmanager_secret.aws_access_key_id.id
+  secret_string = jsonencode({ AWS_ACCESS_KEY_ID = var.aws_access_key_id })
+}
+
+resource "aws_secretsmanager_secret" "aws_secret" {
+  name        = "${var.environment}-aws-secret"
+  description = "AWS_SECRET for ECS tasks"
+  
+  tags = {
+    Environment = var.environment
+    Name        = "AWS_SECRET Secret"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "aws_secret_version" {
+  secret_id     = aws_secretsmanager_secret.aws_secret.id
+  secret_string = jsonencode({ AWS_SECRET = var.aws_secret })
+}
+
+# If storing non-sensitive variables as secrets
+resource "aws_secretsmanager_secret" "parquet_file_queue_url" {
+  name        = "${var.environment}-sqs-queue-url"
+  description = "SQS_QUEUE_URL for ECS tasks"
+  
+  tags = {
+    Environment = var.environment
+    Name        = "SQS_QUEUE_URL Secret"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "parquet_file_queue_url_version" {
+  secret_id     = aws_secretsmanager_secret.parquet_file_queue_url.id
+  secret_string = jsonencode({ SQS_QUEUE_URL = aws_sqs_queue.parquet_file_queue.url })
+}
+
+resource "aws_secretsmanager_secret" "model_outputs_bucket_name" {
+  name        = "${var.environment}-s3-bucket-name"
+  description = "S3_BUCKET_NAME for ECS tasks"
+  
+  tags = {
+    Environment = var.environment
+    Name        = "S3_BUCKET_NAME Secret"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "model_outputs_bucket_name_version" {
+  secret_id     = aws_secretsmanager_secret.model_outputs_bucket_name.id
+  secret_string = jsonencode({ S3_BUCKET_NAME = aws_s3_bucket.model_outputs.bucket })
+}
+
+resource "aws_secretsmanager_secret" "table_name" {
+  name        = "${var.environment}-table-name"
+  description = "TABLE_NAME for ECS tasks"
+  
+  tags = {
+    Environment = var.environment
+    Name        = "TABLE_NAME Secret"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "table_name_version" {
+  secret_id     = aws_secretsmanager_secret.table_name.id
+  secret_string = jsonencode({ TABLE_NAME = aws_dynamodb_table.laion_batches.name })
 }

@@ -137,3 +137,31 @@ variable "dynamodb_table_name" {
   type        = string
   default     = "laion-batches"
 }
+
+
+
+#### secert related #####
+
+
+variable "hf_token" {
+  description = "HF_TOKEN for ECS tasks"
+  type        = string
+  sensitive   = true
+}
+
+variable "aws_access_key_id" {
+  description = "AWS_ACCESS_KEY_ID for ECS tasks"
+  type        = string
+  sensitive   = true
+}
+
+variable "aws_secret" {
+  description = "AWS_SECRET for ECS tasks"
+  type        = string
+  sensitive   = true
+}
+
+
+
+
+
