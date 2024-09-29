@@ -21,8 +21,8 @@ crash.log
 *.tfplan.json
 
 # Ignore sensitive auto-generated files
-terraform.tfvars
-secret.auto.tfvars
+**/terraform.tfvars
+**/secret.auto.tfvars
 
 **/.terraform*
 # Ignore any other backup files
