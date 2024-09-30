@@ -303,8 +303,8 @@ resource "aws_autoscaling_group" "ecs_autoscaling_group" {
   }
 }
 
-resource "aws_ecs_task_definition" "ml_task" {
-  family                   = "ml_task"
+resource "aws_ecs_task_definition" "tar_create_task" {
+  family                   = "tar_create"
   network_mode             = "awsvpc"
   requires_compatibilities = ["EC2"]
   execution_role_arn       = aws_iam_role.ecs_interface_role.arn
@@ -374,7 +374,7 @@ resource "aws_cloudwatch_log_group" "ecs_log_group" {
 resource "aws_ecs_service" "ml_service" {
   name            = "ml-service"
   cluster         = aws_ecs_cluster.ml_cluster.id
-  task_definition = aws_ecs_task_definition.ml_task.arn
+  task_definition = aws_ecs_task_definition.tar_create_task.arn
   desired_count   = var.service_desired_count
   launch_type     = "EC2"
 

@@ -30,7 +30,7 @@ output "ecs_service_name" {
 
 output "ecs_task_definition" {
   description = "ARN of the ECS task definition"
-  value       = aws_ecs_task_definition.ml_task.arn
+  value       = aws_ecs_task_definition.tar_create_task.arn
 }
 
 output "ecs_autoscaling_group_name" {
