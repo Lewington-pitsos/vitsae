@@ -29,6 +29,11 @@ class FileBundler:
 
         self.stop = False
 
+    def _get_ids_from_file(self, file_name):
+        pq_id = file_name.split('-')[0]
+        batch_id = "-".join(file_name.split('-')[1:])
+        return pq_id, batch_id
+
     def check_directory(self):
         print(f'Checking directory {self.watch_dir} for files...')
         self.update_file_counts()
@@ -37,7 +42,8 @@ class FileBundler:
             if count == self.previous_file_counts.get(prefix, 0):
                 if prefix in self.seconds_since_change:
                     if count > self.upload_threshold and time.time() - self.seconds_since_change.get(prefix, 0) > self.seconds_to_wait_before_upload:
-                        self.bundle_and_upload_files(prefix)
+                        pq_id, batch_id = self._get_ids_from_file(prefix)
+                        self.bundle_and_upload_files(pq_id, batch_id)
                 else:
                     self.seconds_since_change[prefix] = time.time()
             else:
@@ -48,20 +54,22 @@ class FileBundler:
         # Reset the file_counts for the next check
         self.file_counts.clear()
 
-    def mark_as_uploaded(self, prefix):
+    def mark_as_uploaded(self, pq_id, batch_id):
         try:
             response = self.dd_table.put_item(
                 Item={
-                    'batch_id': prefix,
-                    'uploaded': True
+                    'parquet_id': pq_id,
+                    'batch_id': batch_id,
+                    'uploaded': True,
                 }
             )
-            print(f'Marked {prefix} as uploaded.', response)
+            print(f'Marked {pq_id}, {batch_id} as uploaded.', response)
         except Exception as e:
-            print(f'Failed to mark {prefix} as uploaded: {e}')
+            print(f'Failed to mark {pq_id}, {batch_id} as uploaded: {e}')
 
+    def bundle_and_upload_files(self, pq_id, batch_id):
+        prefix = f'{pq_id}-{batch_id}'
 
-    def bundle_and_upload_files(self, prefix):
         files_to_bundle = [f for f in os.listdir(self.watch_dir) if f.startswith(prefix)]
         tar_filename = os.path.join(self.watch_dir, f'{prefix}.tar')
 
@@ -71,7 +79,7 @@ class FileBundler:
                 tar.add(file_path, arcname=file_name)
         
         self.upload_to_s3(tar_filename, prefix)
-        self.mark_as_uploaded(prefix)
+        self.mark_as_uploaded(pq_id, batch_id)
 
         os.remove(tar_filename)
         for file_name in files_to_bundle:
@@ -107,7 +115,8 @@ class FileBundler:
             self.update_file_counts()
             for prefix, count in self.file_counts.items():
                 if count > self.upload_threshold:
-                    self.bundle_and_upload_files(prefix)
+                    pq_id, batch_id = self._get_ids_from_file(prefix)
+                    self.bundle_and_upload_files(pq_id, batch_id)
 
         except KeyboardInterrupt:
             print("Stopping the directory monitoring.")

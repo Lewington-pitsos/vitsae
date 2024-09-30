@@ -79,10 +79,10 @@ resource "aws_iam_role_policy_attachment" "ecs_interface_role_policy_attachment"
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-## Custom IAM Policy for S3, SQS, and ECR Access
+## Custom IAM Policy for S3, SQS, ECR, and Parameter Store Access
 resource "aws_iam_policy" "ecs_task_policy" {
   name        = "ecsTaskPolicy"
-  description = "Policy for ECS tasks to access S3, SQS, and ECR"
+  description = "Policy for ECS tasks to access S3, SQS, ECR, and Parameter Store"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -126,16 +126,27 @@ resource "aws_iam_policy" "ecs_task_policy" {
         Resource = aws_dynamodb_table.laion_batches.arn
       },
       {
-        Effect   = "Allow"
-        Action   = [
-          "secretsmanager:GetSecretValue",
-          "secretsmanager:DescribeSecret"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameters",
+          "ssm:GetParameter",
+          "ssm:GetParameterHistory"
         ]
         Resource = [
-          aws_secretsmanager_secret.hf_token.arn,
-          aws_secretsmanager_secret.aws_access_key.arn,
-          aws_secretsmanager_secret.aws_secret.arn,
+          aws_ssm_parameter.hf_token.arn,
+          aws_ssm_parameter.aws_access_key.arn,
+          aws_ssm_parameter.aws_secret.arn,
+          aws_ssm_parameter.parquet_file_queue_url.arn,
+          aws_ssm_parameter.model_outputs_bucket_name.arn,
+          aws_ssm_parameter.table_name.arn,
         ]
+      },
+      {
+        Effect   = "Allow"
+        Action   = [
+          "kms:Decrypt"
+        ]
+        Resource = "*"
       }
     ]
   })
@@ -302,27 +313,27 @@ resource "aws_ecs_task_definition" "ml_task" {
       secrets = [
         {
           name      = "HF_TOKEN"
-          valueFrom = aws_secretsmanager_secret.hf_token.arn
+          valueFrom = aws_ssm_parameter.hf_token.arn
         },
         {
           name      = "AWS_ACCESS_KEY"
-          valueFrom = aws_secretsmanager_secret.aws_access_key.arn
+          valueFrom = aws_ssm_parameter.aws_access_key.arn
         },
         {
           name      = "AWS_SECRET"
-          valueFrom = aws_secretsmanager_secret.aws_secret.arn
+          valueFrom = aws_ssm_parameter.aws_secret.arn
         },
         {
           name      = "SQS_QUEUE_URL"
-          valueFrom = aws_secretsmanager_secret.parquet_file_queue_url.arn
+          valueFrom = aws_ssm_parameter.parquet_file_queue_url.arn
         },
         {
           name      = "S3_BUCKET_NAME"
-          valueFrom = aws_secretsmanager_secret.model_outputs_bucket_name.arn
+          valueFrom = aws_ssm_parameter.model_outputs_bucket_name.arn
         },
         {
           name      = "TABLE_NAME"
-          valueFrom = aws_secretsmanager_secret.table_name.arn
+          valueFrom = aws_ssm_parameter.table_name.arn
         }
       ]
       logConfiguration = {
@@ -381,7 +392,7 @@ resource "aws_dynamodb_table" "laion_batches" {
   name           = var.dynamodb_table_name
   billing_mode   = "PAY_PER_REQUEST"
   hash_key       = "parquet_id"
-  range_key       = "batch_id"
+  range_key      = "batch_id"
 
   attribute {
     name = "batch_id"
@@ -399,99 +410,79 @@ resource "aws_dynamodb_table" "laion_batches" {
   }
 }
 
-
-
 #######################################
-# 6. Secrets Manager for Sensitive Env Vars
+# 6. Parameter Store for Sensitive Env Vars
 #######################################
 
-resource "aws_secretsmanager_secret" "hf_token" {
+resource "aws_ssm_parameter" "hf_token" {
   name        = "${var.environment}-hf-token"
   description = "HF_TOKEN for ECS tasks"
-  
+  type        = "SecureString"
+  value       = var.hf_token
+
   tags = {
     Environment = var.environment
     Name        = "HF_TOKEN Secret"
   }
 }
 
-resource "aws_secretsmanager_secret_version" "hf_token_version" {
-  secret_id     = aws_secretsmanager_secret.hf_token.id
-  secret_string = jsonencode({ HF_TOKEN = var.hf_token })
-}
-
-resource "aws_secretsmanager_secret" "aws_access_key" {
+resource "aws_ssm_parameter" "aws_access_key" {
   name        = "${var.environment}-aws-access-key"
   description = "AWS_ACCESS_KEY for ECS tasks"
-  
+  type        = "SecureString"
+  value       = var.aws_access_key
+
   tags = {
     Environment = var.environment
     Name        = "AWS_ACCESS_KEY Secret"
   }
 }
 
-resource "aws_secretsmanager_secret_version" "aws_access_key_version" {
-  secret_id     = aws_secretsmanager_secret.aws_access_key.id
-  secret_string = jsonencode({ AWS_ACCESS_KEY = var.aws_access_key })
-}
-
-resource "aws_secretsmanager_secret" "aws_secret" {
+resource "aws_ssm_parameter" "aws_secret" {
   name        = "${var.environment}-aws-secret"
   description = "AWS_SECRET for ECS tasks"
-  
+  type        = "SecureString"
+  value       = var.aws_secret
+
   tags = {
     Environment = var.environment
     Name        = "AWS_SECRET Secret"
   }
 }
 
-resource "aws_secretsmanager_secret_version" "aws_secret_version" {
-  secret_id     = aws_secretsmanager_secret.aws_secret.id
-  secret_string = jsonencode({ AWS_SECRET = var.aws_secret })
-}
-
-# If storing non-sensitive variables as secrets
-resource "aws_secretsmanager_secret" "parquet_file_queue_url" {
+# If storing non-sensitive variables as parameters
+resource "aws_ssm_parameter" "parquet_file_queue_url" {
   name        = "${var.environment}-sqs-queue-url"
   description = "SQS_QUEUE_URL for ECS tasks"
-  
+  type        = "String"
+  value       = aws_sqs_queue.parquet_file_queue.url
+
   tags = {
     Environment = var.environment
-    Name        = "SQS_QUEUE_URL Secret"
+    Name        = "SQS_QUEUE_URL Parameter"
   }
 }
 
-resource "aws_secretsmanager_secret_version" "parquet_file_queue_url_version" {
-  secret_id     = aws_secretsmanager_secret.parquet_file_queue_url.id
-  secret_string = jsonencode({ SQS_QUEUE_URL = aws_sqs_queue.parquet_file_queue.url })
-}
-
-resource "aws_secretsmanager_secret" "model_outputs_bucket_name" {
+resource "aws_ssm_parameter" "model_outputs_bucket_name" {
   name        = "${var.environment}-s3-bucket-name"
   description = "S3_BUCKET_NAME for ECS tasks"
-  
+  type        = "String"
+  value       = aws_s3_bucket.model_outputs.bucket
+
   tags = {
     Environment = var.environment
-    Name        = "S3_BUCKET_NAME Secret"
+    Name        = "S3_BUCKET_NAME Parameter"
   }
 }
 
-resource "aws_secretsmanager_secret_version" "model_outputs_bucket_name_version" {
-  secret_id     = aws_secretsmanager_secret.model_outputs_bucket_name.id
-  secret_string = jsonencode({ S3_BUCKET_NAME = aws_s3_bucket.model_outputs.bucket })
-}
-
-resource "aws_secretsmanager_secret" "table_name" {
+resource "aws_ssm_parameter" "table_name" {
   name        = "${var.environment}-table-name"
   description = "TABLE_NAME for ECS tasks"
-  
+  type        = "String"
+  value       = aws_dynamodb_table.laion_batches.name
+
   tags = {
     Environment = var.environment
-    Name        = "TABLE_NAME Secret"
+    Name        = "TABLE_NAME Parameter"
   }
-}
-
-resource "aws_secretsmanager_secret_version" "table_name_version" {
-  secret_id     = aws_secretsmanager_secret.table_name.id
-  secret_string = jsonencode({ TABLE_NAME = aws_dynamodb_table.laion_batches.name })
 }

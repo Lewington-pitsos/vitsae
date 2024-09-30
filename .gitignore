@@ -41,3 +41,5 @@ vitsae/cruft
 
 
 **/__pycache__/
+
+**/vitsae/*.parquet

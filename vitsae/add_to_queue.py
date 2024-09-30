@@ -1,12 +1,13 @@
-import json
 import time
 import boto3
 
+from botocore import credentials
 from python_terraform import Terraform
+from utils import load_config
 
 def generate_urls(small=False):
     if small:
-        base_url = "https://huggingface.co/datasets/lewington/laion2B-multi-joined-translated-to-en-smol/blob/main/"
+        base_url = "https://huggingface.co/datasets/lewington/laion2B-multi-joined-translated-to-en-smol/resolve/main/"
 
         # part-00001-00478b7a-941e-4176-b569-25f4be656991-c000.snappy_part_01.parquet
         urls = [
@@ -25,10 +26,9 @@ def generate_urls(small=False):
     return urls
 
 def push_to_sqs(urls, sqs_queue_url):
-    with open('.credentials.json') as f:
-        credentials = json.load(f)
+    config = load_config()
 
-    sqs = boto3.client('sqs', aws_access_key_id=credentials['AWS_ACCESS_KEY'], aws_secret_access_key=credentials['AWS_SECRET'])
+    sqs = boto3.client('sqs', aws_access_key_id=config['AWS_ACCESS_KEY'], aws_secret_access_key=config['AWS_SECRET'])
 
     for url in urls:
         try:

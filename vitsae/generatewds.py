@@ -85,7 +85,7 @@ def delete_message(sqs, queue_url, receipt_handle):
 #         print(f"Error downloading or parsing parquet file from {url}: {e}")
 #         return None
 
-def download_parquet(url, hf_token, output_dir='./'):
+def download_parquet(base_dir, url, hf_token):
     """
     Download a parquet file from the given URL using the Hugging Face token and save it to disk.
 
@@ -106,7 +106,7 @@ def download_parquet(url, hf_token, output_dir='./'):
         
         # Generate the file name from the URL and save to the specified directory
         pq_id = os.path.basename(url).split('part-')[1].split('-')[0]
-        file_path = os.path.join(output_dir, f'{pq_id}.parquet')
+        file_path = os.path.join(base_dir, f'{pq_id}.parquet')
         
         # Save the parquet content to disk
         with open(file_path, 'wb') as f:
@@ -202,6 +202,7 @@ def process_parquet(base_dir, pq_path, pq_id, already_processed, max_images_per_
         prefix = f"{pq_id}-{start_idx}-{next_idx}"
         semaphore = asyncio.Semaphore(concurrency)
         
+        time_every = 500
         async with aiohttp.ClientSession() as session:
             start = time.time()
             tasks = set()
@@ -222,8 +223,8 @@ def process_parquet(base_dir, pq_path, pq_id, already_processed, max_images_per_
                     if len(tasks) >= concurrency * 2:
                         _, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
 
-                    if index / 200 == 0:
-                        print(f"Processed {200} images in {time.time() - start:.2f} seconds.")
+                    if index % time_every == 0:
+                        print(f"Processed {time_every} images in {time.time() - start:.2f} seconds.")
                         start = time.time()
 
             if tasks:
@@ -240,7 +241,7 @@ def process_parquet(base_dir, pq_path, pq_id, already_processed, max_images_per_
     except OSError as e:
         print(f"Error removing temporary directory: {e}")
 
-def get_already_processed_batches(ddb_table, pq_id, batch_id):
+def get_already_processed_batches(ddb_table, pq_id):
     try:
         response = ddb_table.query(
             KeyConditionExpression=Key('parquet_id').eq(pq_id)
@@ -272,7 +273,7 @@ def generate_webdatasets():
     if not os.path.exists(base_dir):
         os.makedirs(base_dir)
     
-    uploader = FileBundler(base_dir, 1000, s3, s3_bucket_name, 'wds2', ddb_table, seconds_to_wait_before_upload=10)
+    uploader = FileBundler(base_dir, 230, s3, s3_bucket_name, 'wds2', ddb_table, seconds_to_wait_before_upload=10)
     t = Thread(target=uploader.keep_monitoring)
     t.start()
     
@@ -300,16 +301,16 @@ def generate_webdatasets():
                 print(f"Processing parquet file URL: {parquet_url}")
                 download_start = time.time()
 
-                pq_id, pq_path = download_parquet(parquet_url, hf_token)
+                pq_id, pq_path = download_parquet(base_dir, parquet_url, hf_token)
 
                 print(f"Processing parquet with ID: {pq_id} downloaded in {time.time() - download_start:.2f} seconds.")
 
                 already_processed = get_already_processed_batches(ddb_table, pq_id)        
 
                 if pq_path is not None:
-                    process_parquet(pq_id, pq_path, base_dir, already_processed)
+                    process_parquet(base_dir=base_dir, pq_path=pq_path, pq_id=pq_id, already_processed=already_processed, max_images_per_tar=300)
                     delete_message(sqs, sqs_queue_url, message['ReceiptHandle'])
-                    ih.stop_listening() # the parquet has been completed, we never want to add it back to the queue now.
+                    ih.stop_listening() # the parquet time_everyhas been completed, we never want to add it back to the queue now.
                     print(f"Deleted message from SQS: {message.get('MessageId')}")
                 else:
                     print(f"Failed to process parquet file from URL: {parquet_url}. Message not deleted for retry.")
