@@ -66,12 +66,6 @@ variable "cluster_name" {
   default     = "ml-ecs-cluster"
 }
 
-variable "docker_image" {
-  description = "Docker image URI for the ML task (e.g., ECR or Docker Hub)"
-  type        = string
-  default     = "" # Will be set dynamically
-}
-
 variable "container_memory" {
   description = "Container memory in MB"
   type        = number
