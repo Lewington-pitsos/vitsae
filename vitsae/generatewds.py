@@ -1,3 +1,4 @@
+from boto3.dynamodb.conditions import Key
 from threading import Thread
 import json
 import boto3
@@ -10,8 +11,10 @@ import time
 import tempfile
 import asyncio
 import aiohttp
+import pyarrow.parquet as pq
+import pyarrow as pa
 
-from utils import load_credentials
+from utils import load_config
 from uploadwds import FileBundler
 from interruption import InterruptionHandler
 
@@ -21,19 +24,19 @@ def initialize_boto3_clients(credentials):
     """
     sqs = boto3.client(
         'sqs',
-        aws_access_key_id=credentials['AWS_ACCESS_KEY_ID'],
+        aws_access_key_id=credentials['AWS_ACCESS_KEY'],
         aws_secret_access_key=credentials['AWS_SECRET'],
         region_name=credentials.get('AWS_REGION', 'us-east-1')
     )
     s3 = boto3.client(
         's3',
-        aws_access_key_id=credentials['AWS_ACCESS_KEY_ID'],
+        aws_access_key_id=credentials['AWS_ACCESS_KEY'],
         aws_secret_access_key=credentials['AWS_SECRET'],
         region_name=credentials.get('AWS_REGION', 'us-east-1')
     )
     ddb = boto3.resource(
         'dynamodb',
-        aws_access_key_id=credentials['AWS_ACCESS_KEY_ID'],
+        aws_access_key_id=credentials['AWS_ACCESS_KEY'],
         aws_secret_access_key=credentials['AWS_SECRET'],
         region_name=credentials.get('AWS_REGION', 'us-east-1')
     )
@@ -64,9 +67,35 @@ def delete_message(sqs, queue_url, receipt_handle):
         ReceiptHandle=receipt_handle
     )
 
-def download_parquet(url, hf_token):
+# def download_parquet(url, hf_token):
+#     """
+#     Download a parquet file from the given URL using the Hugging Face token.
+#     """
+#     headers = {
+#         'Authorization': f'Bearer {hf_token}'
+#     }
+#     try:
+#         response = requests.get(url, headers=headers, timeout=60)
+#         response.raise_for_status()
+#         # Read parquet file into pandas DataFrame
+#         pq_id = os.path.basename(url).split('part-')[1].split('-')[0]
+#         df = pd.read_parquet(BytesIO(response.content))
+#         return pq_id, df
+#     except Exception as e:
+#         print(f"Error downloading or parsing parquet file from {url}: {e}")
+#         return None
+
+def download_parquet(url, hf_token, output_dir='./'):
     """
-    Download a parquet file from the given URL using the Hugging Face token.
+    Download a parquet file from the given URL using the Hugging Face token and save it to disk.
+
+    Parameters:
+    - url (str): The URL of the parquet file.
+    - hf_token (str): The Hugging Face token for authorization.
+    - output_dir (str): The directory where the parquet file will be saved.
+
+    Returns:
+    - tuple: A tuple containing the parquet file ID and the saved file path.
     """
     headers = {
         'Authorization': f'Bearer {hf_token}'
@@ -74,13 +103,21 @@ def download_parquet(url, hf_token):
     try:
         response = requests.get(url, headers=headers, timeout=60)
         response.raise_for_status()
-        # Read parquet file into pandas DataFrame
+        
+        # Generate the file name from the URL and save to the specified directory
         pq_id = os.path.basename(url).split('part-')[1].split('-')[0]
-        df = pd.read_parquet(BytesIO(response.content))
-        return pq_id, df
+        file_path = os.path.join(output_dir, f'{pq_id}.parquet')
+        
+        # Save the parquet content to disk
+        with open(file_path, 'wb') as f:
+            f.write(response.content)
+        
+        return pq_id, file_path
     except Exception as e:
-        print(f"Error downloading or parsing parquet file from {url}: {e}")
+        print(f"Error downloading or saving parquet file from {url}: {e}")
         return None
+
+
 
 def download_image(image_url):
     try:
@@ -91,7 +128,32 @@ def download_image(image_url):
         print(f"Error downloading image from {image_url}: {e}")
         return None
 
-def process_parquet(base_dir, df, pq_id, already_processed, max_images_per_tar=30000, concurrency=1000):
+
+
+
+
+
+def iterate_parquet_rows(file_path, chunk_size=30000):
+    try:
+        pf = pq.ParquetFile(file_path)
+        
+        batch_iter = pf.iter_batches(batch_size=chunk_size)
+        
+        for batch in batch_iter:
+            # Convert the PyArrow Table batch to a pandas DataFrame
+            df_chunk = batch.to_pandas()
+            
+            if df_chunk.empty:
+                break
+            
+            yield df_chunk
+
+    except Exception as e:
+        print(f"Error reading parquet file in chunks from {file_path}: {e}")
+        return
+
+
+def process_parquet(base_dir, pq_path, pq_id, already_processed, max_images_per_tar=30000, concurrency=1000):
     temp_dir = tempfile.mkdtemp()
     loop = asyncio.get_event_loop()
 
@@ -134,7 +196,7 @@ def process_parquet(base_dir, df, pq_id, already_processed, max_images_per_tar=3
         
         return False  # Indicate that the image was not processed
 
-    async def process_images(base_dir, pq_id, batch_size, already_processed):
+    async def process_images(base_dir, pq_path, pq_id, batch_size, already_processed):
         start_idx = 0
         next_idx = start_idx + batch_size
         prefix = f"{pq_id}-{start_idx}-{next_idx}"
@@ -143,30 +205,31 @@ def process_parquet(base_dir, df, pq_id, already_processed, max_images_per_tar=3
         async with aiohttp.ClientSession() as session:
             start = time.time()
             tasks = set()
-            for index, row in df.iterrows():
-                if prefix in already_processed:
-                    continue
+            for df in iterate_parquet_rows(pq_path):
+                for index, row in df.iterrows():
+                    if prefix in already_processed:
+                        continue
 
-                if index >= next_idx:
-                    start_idx = next_idx
-                    next_idx = start_idx + batch_size
-                    prefix = f"{pq_id}-{start_idx}-{next_idx}"
+                    if index >= next_idx:
+                        start_idx = next_idx
+                        next_idx = start_idx + batch_size
+                        prefix = f"{pq_id}-{start_idx}-{next_idx}"
 
-                async with semaphore:
-                    tasks.add(asyncio.create_task(download_image(session, base_dir, prefix, index, row)))
+                    async with semaphore:
+                        tasks.add(asyncio.create_task(download_image(session, base_dir, prefix, index, row)))
 
-                # discard completed tasks to avoid memory leak
-                if len(tasks) >= concurrency * 2:
-                    _, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                    # discard completed tasks to avoid memory leak
+                    if len(tasks) >= concurrency * 2:
+                        _, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
 
-            if index / 200 == 0:
-                print(f"Processed {200} images in {time.time() - start:.2f} seconds.")
-                start = time.time()
+                    if index / 200 == 0:
+                        print(f"Processed {200} images in {time.time() - start:.2f} seconds.")
+                        start = time.time()
 
             if tasks:
                 await asyncio.gather(*tasks)
 
-    loop.run_until_complete(process_images(base_dir, pq_id, max_images_per_tar, already_processed))
+    loop.run_until_complete(process_images(base_dir, pq_path, pq_id, max_images_per_tar, already_processed))
 
     # Clean up the temporary directory and its contents
     try:
@@ -177,14 +240,10 @@ def process_parquet(base_dir, df, pq_id, already_processed, max_images_per_tar=3
     except OSError as e:
         print(f"Error removing temporary directory: {e}")
 
-def get_already_processed_batches(ddb_table, pq_id):
+def get_already_processed_batches(ddb_table, pq_id, batch_id):
     try:
-        # query all keys which begin with the pq id
         response = ddb_table.query(
-            KeyConditionExpression='begins_with(batch_id, :prefix)',
-            ExpressionAttributeValues={
-                ':prefix': pq_id
-            }
+            KeyConditionExpression=Key('parquet_id').eq(pq_id)
         )
         return set([item.get('batch_id') for item in response.get('Items', [])])
     except Exception as e:
@@ -195,14 +254,14 @@ def generate_webdatasets():
     """
     Main function to continuously process messages from SQS.
     """
-    credentials = load_credentials()
-    sqs, s3, ddb_table = initialize_boto3_clients(credentials)
+    config = load_config()
+    sqs, s3, ddb_table = initialize_boto3_clients(config)
 
     # Retrieve SQS queue URL and S3 bucket name from credentials
-    sqs_queue_url = credentials.get('SQS_QUEUE_URL')
-    s3_bucket_name = credentials.get('S3_BUCKET_NAME')
+    sqs_queue_url = config.get('SQS_QUEUE_URL')
+    s3_bucket_name = config.get('S3_BUCKET_NAME')
 
-    hf_token = credentials.get('HF_TOKEN')
+    hf_token = config.get('HF_TOKEN')
 
     if not sqs_queue_url or not s3_bucket_name:
         print("Error: 'SQS_QUEUE_URL' and 'S3_BUCKET_NAME' must be set in the credentials file.")
@@ -218,30 +277,47 @@ def generate_webdatasets():
     t.start()
     
     print(f"Starting to process messages from SQS queue: {sqs_queue_url}")
+    total_wait_time = 0
+    max_wait_time = 500
     while True:
-        messages = receive_message(sqs, sqs_queue_url, wait_time=60 * 5)
+        messages = receive_message(sqs, sqs_queue_url, wait_time=20)
         if not messages:
-            print("No messages available for 60 seconds terminating")
-            break
+            total_wait_time += 20
+            print(f"No messages available yet. Total wait time: {total_wait_time} seconds.")
+
+            if total_wait_time > max_wait_time:
+                print(f"No messages available for {max_wait_time} seconds terminating")
+                break
+
+            continue
 
         for message in messages:
-            message_body = message['Body']
-            ih = InterruptionHandler(message, sqs) # adds the pq message back into the queue if the spot instance is interrupted
-            ih.start_listening()
+            parquet_url = message['Body']
+            ih = InterruptionHandler(parquet_url, sqs_queue_url, sqs) # adds the pq message back into the queue if the spot instance is interrupted
+            try:
+                ih.start_listening()
 
-            print(f"Processing parquet file URL: {message_body}")
+                print(f"Processing parquet file URL: {parquet_url}")
+                download_start = time.time()
 
-            pq_id, df = download_parquet(message_body, hf_token)
+                pq_id, pq_path = download_parquet(parquet_url, hf_token)
 
-            already_processed = get_already_processed_batches(ddb_table, pq_id)        
+                print(f"Processing parquet with ID: {pq_id} downloaded in {time.time() - download_start:.2f} seconds.")
 
-            if df is not None:
-                process_parquet(pq_id, df, base_dir, pq_id, already_processed)
-                delete_message(sqs, sqs_queue_url, message['ReceiptHandle'])
-                ih.stop_listening() # the parquet has been completed, we never want to add it back to the queue now.
-                print(f"Deleted message from SQS: {message.get('MessageId')}")
-            else:
-                print(f"Failed to process parquet file from URL: {message_body}. Message not deleted for retry.")
+                already_processed = get_already_processed_batches(ddb_table, pq_id)        
+
+                if pq_path is not None:
+                    process_parquet(pq_id, pq_path, base_dir, already_processed)
+                    delete_message(sqs, sqs_queue_url, message['ReceiptHandle'])
+                    ih.stop_listening() # the parquet has been completed, we never want to add it back to the queue now.
+                    print(f"Deleted message from SQS: {message.get('MessageId')}")
+                else:
+                    print(f"Failed to process parquet file from URL: {parquet_url}. Message not deleted for retry.")
+            except Exception as e:
+                print(f"Error processing message: {e}")
+                ih.stop_listening()
+                ih.add_pq_back()
+                continue
 
     uploader.finalize()
     t.join()

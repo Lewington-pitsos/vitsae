@@ -12,9 +12,10 @@ def check_for_interruption():
     return False
 
 class InterruptionHandler():
-    def __init__(self, message, sqs_client, interrupt_fn=None) -> None:
+    def __init__(self, url, queue_url, sqs_client, interrupt_fn=None) -> None:
         self._stop = False
-        self.message = message
+        self.url = url
+        self.queue_url = queue_url
         self.sqs_client = sqs_client
 
         if interrupt_fn is None:
@@ -25,15 +26,18 @@ class InterruptionHandler():
     def listen(self):
         while not self._stop:
             if self.interrupt_fn():
-                self._add_pq_back()
+                self.add_pq_back()
                 break
             time.sleep(5)
 
-    def _add_pq_back(self):
-        if isinstance(self.message, dict):
-            self.sqs_client.send_message(**self.message)
+    def add_pq_back(self):
+        if self.url is not None:
+            url = self.url
+            self.url = None
+
+            self.sqs_client.send_message(QueueUrl=self.queue_url, MessageBody=url)
         else:
-            raise ValueError("Message must be a dictionary with 'QueueUrl' and 'MessageBody'")
+            print("message has already been added back to the queue")
 
 
     def start_listening(self):

@@ -1,4 +1,4 @@
-from vitsae.generatewds import generate_webdatasets
+from generatewds import generate_webdatasets
 
 
 if __name__ == "__main__":

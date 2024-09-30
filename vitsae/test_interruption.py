@@ -36,7 +36,7 @@ def test_interruption_handler_init_default_interrupt_fn(mock_sqs_client):
     message = {"QueueUrl": "test_url", "MessageBody": "test_body"}
     handler = InterruptionHandler(message, mock_sqs_client)
 
-    assert handler.message == message
+    assert handler.url == message
     assert handler.sqs_client == mock_sqs_client
     assert handler.interrupt_fn == check_for_interruption
     assert not handler._stop
@@ -51,7 +51,7 @@ def test_interruption_handler_init_custom_interrupt_fn(mock_sqs_client):
 def test_add_pq_back_with_valid_message(mock_sqs_client):
     message = {"QueueUrl": "test_url", "MessageBody": "test_body"}
     handler = InterruptionHandler(message, mock_sqs_client)
-    handler._add_pq_back()
+    handler.add_pq_back()
     mock_sqs_client.send_message.assert_called_once_with(**message)
 
 def test_add_pq_back_with_invalid_message():
@@ -60,7 +60,7 @@ def test_add_pq_back_with_invalid_message():
     handler = InterruptionHandler(message, mock_sqs_client)
     
     with pytest.raises(ValueError, match="Message must be a dictionary with 'QueueUrl' and 'MessageBody'"):
-        handler._add_pq_back()
+        handler.add_pq_back()
 
 @patch('time.sleep', return_value=None)
 def test_listen_interrupt_triggered(mock_sleep, mock_sqs_client):

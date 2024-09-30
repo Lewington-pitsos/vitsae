@@ -15,12 +15,13 @@ RUN curl -sSL https://install.python-poetry.org | python3 - && \
 
 RUN poetry config virtualenvs.create false
 
-WORKDIR /app
+RUN mkdir /vitsae
+WORKDIR /vitsae
 
-COPY pyproject.toml poetry.lock* /app/
+COPY pyproject.toml poetry.lock* /vitsae/
 
 RUN poetry install --no-root --no-interaction --no-ansi
 
-COPY . /app
+COPY . /vitsae
 
 CMD ["python", "main.py"]

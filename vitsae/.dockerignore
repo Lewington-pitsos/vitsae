@@ -1,0 +1,10 @@
+.credentials.json
+cruft
+.venv
+__pycache__
+.pytest_cache
+pad.py
+load_secrets.sh
+
+Dockerfile
+.dockerignore

@@ -3,7 +3,7 @@ import tarfile
 import boto3
 from collections import defaultdict
 import time
-from utils import load_credentials
+from utils import load_config
 
 class FileBundler:
     def __init__(self, 
@@ -119,12 +119,12 @@ if __name__ == "__main__":
     watch_dir = 'cruft/images/'
     file_count_threshold = 50
 
-    credentials = load_credentials()
+    config = load_config()
     s3 = boto3.client('s3', 
-                      aws_access_key_id=credentials['AWS_ACCESS_KEY_ID'],
-                      aws_secret_access_key=credentials['AWS_SECRET'],
+                      aws_access_key_id=config['AWS_ACCESS_KEY'],
+                      aws_secret_access_key=config['AWS_SECRET'],
                       region_name='us-east-1')
 
-    file_bundler = FileBundler(watch_dir, file_count_threshold, s3, credentials['S3_BUCKET_NAME'], s3_prefix)
+    file_bundler = FileBundler(watch_dir, file_count_threshold, s3, config['S3_BUCKET_NAME'], s3_prefix)
     
     file_bundler.keep_monitoring()

@@ -4,7 +4,19 @@ import boto3
 
 from python_terraform import Terraform
 
-def generate_urls():
+def generate_urls(small=False):
+    if small:
+        base_url = "https://huggingface.co/datasets/lewington/laion2B-multi-joined-translated-to-en-smol/blob/main/"
+
+        # part-00001-00478b7a-941e-4176-b569-25f4be656991-c000.snappy_part_01.parquet
+        urls = [
+            f"{base_url}part-00001-00478b7a-941e-4176-b569-25f4be656991-c000.snappy_part_{i:02d}.parquet"
+            for i in range(1, 31)
+        ]
+
+        return urls
+
+
     base_url = "https://huggingface.co/datasets/laion/laion2B-multi-joined-translated-to-en/resolve/main/"
     urls = [
         f"{base_url}part-{i:05d}-00478b7a-941e-4176-b569-25f4be656991-c000.snappy.parquet"
@@ -16,7 +28,7 @@ def push_to_sqs(urls, sqs_queue_url):
     with open('.credentials.json') as f:
         credentials = json.load(f)
 
-    sqs = boto3.client('sqs', aws_access_key_id=credentials['AWS_ACCESS_KEY_ID'], aws_secret_access_key=credentials['AWS_SECRET'])
+    sqs = boto3.client('sqs', aws_access_key_id=credentials['AWS_ACCESS_KEY'], aws_secret_access_key=credentials['AWS_SECRET'])
 
     for url in urls:
         try:
@@ -44,5 +56,5 @@ if __name__ == "__main__":
 
     print(f"SQS Queue URL: {sqs_queue_url}")
 
-    urls = generate_urls()
+    urls = generate_urls(small=True)
     push_to_sqs(urls, sqs_queue_url)

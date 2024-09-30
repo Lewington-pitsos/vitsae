@@ -149,8 +149,8 @@ variable "hf_token" {
   sensitive   = true
 }
 
-variable "aws_access_key_id" {
-  description = "AWS_ACCESS_KEY_ID for ECS tasks"
+variable "aws_access_key" {
+  description = "AWS_ACCESS_KEY for ECS tasks"
   type        = string
   sensitive   = true
 }

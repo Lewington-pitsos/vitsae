@@ -133,7 +133,7 @@ resource "aws_iam_policy" "ecs_task_policy" {
         ]
         Resource = [
           aws_secretsmanager_secret.hf_token.arn,
-          aws_secretsmanager_secret.aws_access_key_id.arn,
+          aws_secretsmanager_secret.aws_access_key.arn,
           aws_secretsmanager_secret.aws_secret.arn,
         ]
       }
@@ -305,8 +305,8 @@ resource "aws_ecs_task_definition" "ml_task" {
           valueFrom = aws_secretsmanager_secret.hf_token.arn
         },
         {
-          name      = "AWS_ACCESS_KEY_ID"
-          valueFrom = aws_secretsmanager_secret.aws_access_key_id.arn
+          name      = "AWS_ACCESS_KEY"
+          valueFrom = aws_secretsmanager_secret.aws_access_key.arn
         },
         {
           name      = "AWS_SECRET"
@@ -380,10 +380,16 @@ resource "aws_ecs_service" "ml_service" {
 resource "aws_dynamodb_table" "laion_batches" {
   name           = var.dynamodb_table_name
   billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "batch_id"
+  hash_key       = "parquet_id"
+  range_key       = "batch_id"
 
   attribute {
     name = "batch_id"
+    type = "S"
+  }
+
+  attribute {
+    name = "parquet_id"
     type = "S"
   }
 
@@ -414,19 +420,19 @@ resource "aws_secretsmanager_secret_version" "hf_token_version" {
   secret_string = jsonencode({ HF_TOKEN = var.hf_token })
 }
 
-resource "aws_secretsmanager_secret" "aws_access_key_id" {
-  name        = "${var.environment}-aws-access-key-id"
-  description = "AWS_ACCESS_KEY_ID for ECS tasks"
+resource "aws_secretsmanager_secret" "aws_access_key" {
+  name        = "${var.environment}-aws-access-key"
+  description = "AWS_ACCESS_KEY for ECS tasks"
   
   tags = {
     Environment = var.environment
-    Name        = "AWS_ACCESS_KEY_ID Secret"
+    Name        = "AWS_ACCESS_KEY Secret"
   }
 }
 
-resource "aws_secretsmanager_secret_version" "aws_access_key_id_version" {
-  secret_id     = aws_secretsmanager_secret.aws_access_key_id.id
-  secret_string = jsonencode({ AWS_ACCESS_KEY_ID = var.aws_access_key_id })
+resource "aws_secretsmanager_secret_version" "aws_access_key_version" {
+  secret_id     = aws_secretsmanager_secret.aws_access_key.id
+  secret_string = jsonencode({ AWS_ACCESS_KEY = var.aws_access_key })
 }
 
 resource "aws_secretsmanager_secret" "aws_secret" {
