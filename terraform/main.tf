@@ -256,6 +256,12 @@ resource "aws_launch_template" "ecs_launch_template" {
     security_groups             = [aws_security_group.ecs_security_group.id]
   }
 
+  user_data = base64encode(<<EOF
+#!/bin/bash
+echo ECS_CLUSTER=${aws_ecs_cluster.ml_cluster.name} >> /etc/ecs/ecs.config
+EOF
+)
+
   tag_specifications {
     resource_type = "instance"
 
@@ -265,6 +271,7 @@ resource "aws_launch_template" "ecs_launch_template" {
     }
   }
 }
+
 
 # Auto Scaling Group for ECS Instances
 resource "aws_autoscaling_group" "ecs_autoscaling_group" {

@@ -1,9 +1,9 @@
 import time
 import boto3
 
-from botocore import credentials
 from python_terraform import Terraform
 from utils import load_config
+import fire
 
 def generate_urls(small=False):
     if small:
@@ -48,13 +48,16 @@ def push_to_sqs(urls, sqs_queue_url):
     num_messages = response['Attributes']['ApproximateNumberOfMessages']
     print(f'Approximate number of messages in the queue: {num_messages}')
 
-if __name__ == "__main__":
-
-
+def main(test=False):
     tf = Terraform(working_dir='../terraform')
     sqs_queue_url = tf.output()['sqs_queue_url']['value']
 
     print(f"SQS Queue URL: {sqs_queue_url}")
 
-    urls = generate_urls(small=True)
+    urls = generate_urls(small=test)
     push_to_sqs(urls, sqs_queue_url)
+
+
+if __name__ == "__main__":
+    fire.Fire(main)
+

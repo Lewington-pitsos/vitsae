@@ -24,3 +24,6 @@ docker run -it \
   -e S3_BUCKET_NAME=$S3_BUCKET_NAME \
   -e TABLE_NAME=$TABLE_NAME \
   304905445943.dkr.ecr.us-east-1.amazonaws.com/file-ecr
+
+
+aws autoscaling describe-auto-scaling-groups --query "AutoScalingGroups[?contains(AutoScalingGroupName, 'ecs-autoscaling-group')]"

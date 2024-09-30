@@ -136,8 +136,9 @@ def download_image(image_url):
 def iterate_parquet_rows(file_path, chunk_size=30000):
     try:
         pf = pq.ParquetFile(file_path)
-        
         batch_iter = pf.iter_batches(batch_size=chunk_size)
+        
+        total_rows_processed = 0  # Initialize the total rows counter
         
         for batch in batch_iter:
             # Convert the PyArrow Table batch to a pandas DataFrame
@@ -145,12 +146,17 @@ def iterate_parquet_rows(file_path, chunk_size=30000):
             
             if df_chunk.empty:
                 break
+
+            # Adjust the index to keep it incrementing
+            df_chunk.index = range(total_rows_processed, total_rows_processed + len(df_chunk))
+            total_rows_processed += len(df_chunk)  # Update the counter
             
             yield df_chunk
 
     except Exception as e:
         print(f"Error reading parquet file in chunks from {file_path}: {e}")
         return
+
 
 
 def process_parquet(base_dir, pq_path, pq_id, already_processed, max_images_per_tar=30000, concurrency=1000):
@@ -200,7 +206,6 @@ def process_parquet(base_dir, pq_path, pq_id, already_processed, max_images_per_
         start_idx = 0
         next_idx = start_idx + batch_size
         prefix = f"{pq_id}-{start_idx}-{next_idx}"
-        semaphore = asyncio.Semaphore(concurrency)
         
         time_every = 500
         async with aiohttp.ClientSession() as session:
@@ -208,21 +213,24 @@ def process_parquet(base_dir, pq_path, pq_id, already_processed, max_images_per_
             tasks = set()
             for df in iterate_parquet_rows(pq_path):
                 for index, row in df.iterrows():
-                    if prefix in already_processed:
-                        continue
-
                     if index >= next_idx:
                         start_idx = next_idx
                         next_idx = start_idx + batch_size
                         prefix = f"{pq_id}-{start_idx}-{next_idx}"
 
-                    async with semaphore:
-                        tasks.add(asyncio.create_task(download_image(session, base_dir, prefix, index, row)))
+                    if prefix in already_processed:
+                        print('Skipping already processed batch:', prefix)
+                        continue
 
                     # discard completed tasks to avoid memory leak
                     if len(tasks) >= concurrency * 2:
-                        _, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                        while len(tasks) >= concurrency:
+                            print('Waiting for tasks to complete...', len(tasks))
+                            _, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                            time.sleep(0.5)
 
+                    tasks.add(asyncio.create_task(download_image(session, base_dir, prefix, index, row)))
+                    
                     if index % time_every == 0:
                         print(f"Processed {time_every} images in {time.time() - start:.2f} seconds.")
                         start = time.time()
@@ -246,7 +254,7 @@ def get_already_processed_batches(ddb_table, pq_id):
         response = ddb_table.query(
             KeyConditionExpression=Key('parquet_id').eq(pq_id)
         )
-        return set([item.get('batch_id') for item in response.get('Items', [])])
+        return set([f"{pq_id}-{item.get('batch_id')}" for item in response.get('Items', [])])
     except Exception as e:
         print(f"Error retrieving already processed batches from DynamoDB: {e}")
         return []
@@ -308,7 +316,7 @@ def generate_webdatasets():
                 already_processed = get_already_processed_batches(ddb_table, pq_id)        
 
                 if pq_path is not None:
-                    process_parquet(base_dir=base_dir, pq_path=pq_path, pq_id=pq_id, already_processed=already_processed, max_images_per_tar=300)
+                    process_parquet(base_dir=base_dir, pq_path=pq_path, pq_id=pq_id, already_processed=already_processed, max_images_per_tar=500, concurrency=500)
                     delete_message(sqs, sqs_queue_url, message['ReceiptHandle'])
                     ih.stop_listening() # the parquet time_everyhas been completed, we never want to add it back to the queue now.
                     print(f"Deleted message from SQS: {message.get('MessageId')}")

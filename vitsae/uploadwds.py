@@ -134,6 +134,6 @@ if __name__ == "__main__":
                       aws_secret_access_key=config['AWS_SECRET'],
                       region_name='us-east-1')
 
-    file_bundler = FileBundler(watch_dir, file_count_threshold, s3, config['S3_BUCKET_NAME'], s3_prefix)
+    file_bundler = FileBundler(watch_dir, file_count_threshold, s3, config['S3_BUCKET_NAME'], s3_prefix, seconds_to_wait_before_upload=10)
     
     file_bundler.keep_monitoring()
