@@ -67,56 +67,36 @@ def delete_message(sqs, queue_url, receipt_handle):
         ReceiptHandle=receipt_handle
     )
 
-# def download_parquet(url, hf_token):
-#     """
-#     Download a parquet file from the given URL using the Hugging Face token.
-#     """
-#     headers = {
-#         'Authorization': f'Bearer {hf_token}'
-#     }
-#     try:
-#         response = requests.get(url, headers=headers, timeout=60)
-#         response.raise_for_status()
-#         # Read parquet file into pandas DataFrame
-#         pq_id = os.path.basename(url).split('part-')[1].split('-')[0]
-#         df = pd.read_parquet(BytesIO(response.content))
-#         return pq_id, df
-#     except Exception as e:
-#         print(f"Error downloading or parsing parquet file from {url}: {e}")
-#         return None
-
 def download_parquet(base_dir, url, hf_token):
-    """
-    Download a parquet file from the given URL using the Hugging Face token and save it to disk.
-
-    Parameters:
-    - url (str): The URL of the parquet file.
-    - hf_token (str): The Hugging Face token for authorization.
-    - output_dir (str): The directory where the parquet file will be saved.
-
-    Returns:
-    - tuple: A tuple containing the parquet file ID and the saved file path.
-    """
     headers = {
         'Authorization': f'Bearer {hf_token}'
     }
+    temp_suffix = ".part"
     try:
-        response = requests.get(url, headers=headers, timeout=60)
+        response = requests.get(url, headers=headers, stream=True, timeout=60)
         response.raise_for_status()
-        
+
         # Generate the file name from the URL and save to the specified directory
         pq_id = os.path.basename(url).split('part-')[1].split('-')[0]
-        file_path = os.path.join(base_dir, f'{pq_id}.parquet')
-        
-        # Save the parquet content to disk
-        with open(file_path, 'wb') as f:
-            f.write(response.content)
-        
-        return pq_id, file_path
+        final_file_path = os.path.join(base_dir, f'{pq_id}.parquet')
+        temp_file_path = final_file_path + temp_suffix
+
+        # Save the parquet content to disk in chunks
+        with open(temp_file_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=1024 * 1024):  # 1MB chunks
+                if chunk:  # Filter out keep-alive chunks
+                    f.write(chunk)
+
+        # Rename temp file to final file
+        os.rename(temp_file_path, final_file_path)
+
+        return pq_id, final_file_path
     except Exception as e:
         print(f"Error downloading or saving parquet file from {url}: {e}")
+        # Cleanup temp file if exists
+        if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
         return None
-
 
 
 def download_image(image_url):
@@ -156,8 +136,6 @@ def iterate_parquet_rows(file_path, chunk_size=30000):
     except Exception as e:
         print(f"Error reading parquet file in chunks from {file_path}: {e}")
         return
-
-
 
 def process_parquet(base_dir, pq_path, pq_id, already_processed, max_images_per_tar=30000, concurrency=1000):
     temp_dir = tempfile.mkdtemp()

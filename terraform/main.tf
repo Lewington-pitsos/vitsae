@@ -4,6 +4,106 @@ provider "aws" {
   region = var.region
 }
 
+
+#######################################
+# 0. VPC and Subnet Configuration
+#######################################
+
+# Create VPC
+resource "aws_vpc" "ml_vpc" {
+  cidr_block = "10.0.0.0/16"
+
+  tags = {
+    Name = "${var.environment}-vpc"
+  }
+}
+
+# Create Subnets
+resource "aws_subnet" "public_subnet" {
+  vpc_id     = aws_vpc.ml_vpc.id
+  cidr_block = "10.0.1.0/24"
+  availability_zone = "${var.region}a"
+
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = "${var.environment}-public-subnet"
+  }
+}
+
+resource "aws_subnet" "private_subnet" {
+  vpc_id     = aws_vpc.ml_vpc.id
+  cidr_block = "10.0.2.0/24"
+  availability_zone = "${var.region}a"
+
+  tags = {
+    Name = "${var.environment}-private-subnet"
+  }
+}
+
+# Create Internet Gateway for the public subnet
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.ml_vpc.id
+
+  tags = {
+    Name = "${var.environment}-igw"
+  }
+}
+
+# Create NAT Gateway for the private subnet
+resource "aws_eip" "nat_eip" {
+  vpc = true
+}
+
+resource "aws_nat_gateway" "nat_gw" {
+  allocation_id = aws_eip.nat_eip.id
+  subnet_id     = aws_subnet.public_subnet.id
+
+  tags = {
+    Name = "${var.environment}-nat-gw"
+  }
+}
+
+# Create Public Route Table
+resource "aws_route_table" "public_rt" {
+  vpc_id = aws_vpc.ml_vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
+  }
+
+  tags = {
+    Name = "${var.environment}-public-rt"
+  }
+}
+
+# Associate Public Subnet with Public Route Table
+resource "aws_route_table_association" "public_rt_assoc" {
+  subnet_id      = aws_subnet.public_subnet.id
+  route_table_id = aws_route_table.public_rt.id
+}
+
+# Create Private Route Table
+resource "aws_route_table" "private_rt" {
+  vpc_id = aws_vpc.ml_vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.nat_gw.id
+  }
+
+  tags = {
+    Name = "${var.environment}-private-rt"
+  }
+}
+
+# Associate Private Subnet with Private Route Table
+resource "aws_route_table_association" "private_rt_assoc" {
+  subnet_id      = aws_subnet.private_subnet.id
+  route_table_id = aws_route_table.private_rt.id
+}
+
 #######################################
 # 1. S3 Bucket for Model Outputs
 #######################################
@@ -189,11 +289,11 @@ resource "aws_iam_instance_profile" "ecs_instance_profile" {
   role = aws_iam_role.ecs_instance_role.name
 }
 
-# Security Group for ECS Instances
+
 resource "aws_security_group" "ecs_security_group" {
-  name        = "ecs_security_group"
+  name        = "${var.environment}-ecs-sg"
   description = "Allow necessary traffic for ECS instances"
-  vpc_id      = var.vpc_id
+  vpc_id      = aws_vpc.ml_vpc.id
 
   ingress {
     from_port   = 22
@@ -220,7 +320,6 @@ resource "aws_security_group" "ecs_security_group" {
     Environment = var.environment
   }
 }
-
 # Data Source for ECS Optimized AMI
 data "aws_ami" "ecs_optimized" {
   most_recent = true
@@ -274,6 +373,7 @@ EOF
 
 
 # Auto Scaling Group for ECS Instances
+
 resource "aws_autoscaling_group" "ecs_autoscaling_group" {
   name                      = "ecs-autoscaling-group"
   max_size                  = var.max_size
@@ -284,7 +384,7 @@ resource "aws_autoscaling_group" "ecs_autoscaling_group" {
     version = "$Latest"
   }
 
-  vpc_zone_identifier = var.subnet_ids
+  vpc_zone_identifier = [aws_subnet.private_subnet.id]
 
   tag {
     key                 = "Name"
@@ -370,7 +470,8 @@ resource "aws_cloudwatch_log_group" "ecs_log_group" {
   }
 }
 
-# ECS Service
+
+# Update ECS Service Configuration to Use New Subnets
 resource "aws_ecs_service" "ml_service" {
   name            = "ml-service"
   cluster         = aws_ecs_cluster.ml_cluster.id
@@ -379,7 +480,7 @@ resource "aws_ecs_service" "ml_service" {
   launch_type     = "EC2"
 
   network_configuration {
-    subnets          = var.subnet_ids
+    subnets          = [aws_subnet.private_subnet.id]
     security_groups  = [aws_security_group.ecs_security_group.id]
   }
 
@@ -394,7 +495,6 @@ resource "aws_ecs_service" "ml_service" {
     aws_cloudwatch_log_group.ecs_log_group
   ]
 }
-
 resource "aws_dynamodb_table" "laion_batches" {
   name           = var.dynamodb_table_name
   billing_mode   = "PAY_PER_REQUEST"

@@ -110,17 +110,6 @@ variable "desired_capacity" {
   default     = 2
 }
 
-# Networking Variables
-variable "vpc_id" {
-  description = "VPC ID where resources will be deployed"
-  type        = string
-}
-
-variable "subnet_ids" {
-  description = "List of subnet IDs for the Auto Scaling Group and ECS service"
-  type        = list(string)
-}
-
 variable "my_ip_cidr_block" {
   description = "Your IP CIDR block for SSH access (e.g., '203.0.113.0/24')"
   type        = string
