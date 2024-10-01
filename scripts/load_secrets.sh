@@ -12,6 +12,8 @@ echo "AWS_SECRET: $AWS_SECRET"
 echo "SQS_QUEUE_URL: $SQS_QUEUE_URL"
 echo "BUCKET_NAME: $S3_BUCKET_NAME"
 echo "TABLE_NAME: $TABLE_NAME"
+echo "ECS_CLUSTER_NAME: $ECS_CLUSTER_NAME"
+echo "ECS_SERVICE_NAME: $ECS_SERVICE_NAME"
 
 # Export environment variables by retrieving values from Parameter Store
 export HF_TOKEN=$(aws ssm get-parameter --name production-hf-token --region us-east-1 --with-decryption --query 'Parameter.Value' --output text)
@@ -20,6 +22,8 @@ export AWS_SECRET=$(aws ssm get-parameter --name production-aws-secret --region 
 export SQS_QUEUE_URL=$(aws ssm get-parameter --name production-sqs-queue-url --region us-east-1 --query 'Parameter.Value' --output text)
 export S3_BUCKET_NAME=$(aws ssm get-parameter --name production-s3-bucket-name --region us-east-1 --query 'Parameter.Value' --output text)
 export TABLE_NAME=$(aws ssm get-parameter --name production-table-name --region us-east-1 --query 'Parameter.Value' --output text)
+export ECS_CLUSTER_NAME=$(aws ssm get-parameter --name production-ecs-cluster-name --region us-east-1 --query 'Parameter.Value' --output text)
+export ECS_SERVICE_NAME=$(aws ssm get-parameter --name production-ecs-service-name --region us-east-1 --query 'Parameter.Value' --output text)
 
 echo "Retrieved Environment Variables:"
 echo "HF_TOKEN: $HF_TOKEN"
@@ -28,3 +32,5 @@ echo "AWS_SECRET: $AWS_SECRET"
 echo "SQS_QUEUE_URL: $SQS_QUEUE_URL"
 echo "BUCKET_NAME: $S3_BUCKET_NAME"
 echo "TABLE_NAME: $TABLE_NAME"
+echo "ECS_CLUSTER_NAME: $ECS_CLUSTER_NAME"
+echo "ECS_SERVICE_NAME: $ECS_SERVICE_NAME"

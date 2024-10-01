@@ -337,6 +337,7 @@ resource "aws_launch_template" "ecs_launch_template" {
   image_id      = data.aws_ami.ecs_optimized.id
   instance_type = var.instance_type
 
+
   iam_instance_profile {
     name = aws_iam_instance_profile.ecs_instance_profile.name
   }
@@ -360,6 +361,15 @@ resource "aws_launch_template" "ecs_launch_template" {
 echo ECS_CLUSTER=${aws_ecs_cluster.ml_cluster.name} >> /etc/ecs/ecs.config
 EOF
 )
+
+  block_device_mappings {
+    device_name = data.aws_ami.ecs_optimized.root_device_name
+
+    ebs {
+      volume_size           = 150
+      delete_on_termination = true
+    }
+  }
 
   tag_specifications {
     resource_type = "instance"
@@ -446,6 +456,14 @@ resource "aws_ecs_task_definition" "tar_create_task" {
         {
           name      = "TABLE_NAME"
           valueFrom = aws_ssm_parameter.table_name.arn
+        },
+        {
+          name      = "ECS_CLUSTER_NAME"
+          value     = aws_ecs_cluster.ml_cluster.name
+        },
+        {
+          name      = "ECS_SERVICE_NAME"
+          value     = aws_ecs_service.ml_service.name
         }
       ]
       logConfiguration = {
@@ -596,5 +614,29 @@ resource "aws_ssm_parameter" "table_name" {
   tags = {
     Environment = var.environment
     Name        = "TABLE_NAME Parameter"
+  }
+}
+
+resource "aws_ssm_parameter" "ecs_cluster_name" {
+  name        = "${var.environment}-ecs-cluster-name"
+  description = "ECS_CLUSTER_NAME for ECS tasks"
+  type        = "String"
+  value       = aws_ecs_cluster.ml_cluster.name
+
+  tags = {
+    Environment = var.environment
+    Name        = "ECS_CLUSTER_NAME Parameter"
+  }
+}
+
+resource "aws_ssm_parameter" "ecs_service_name" {
+  name        = "${var.environment}-ecs-service-name"
+  description = "ECS_SERVICE_NAME for ECS tasks"
+  type        = "String"
+  value       = aws_ecs_service.ml_service.name
+
+  tags = {
+    Environment = var.environment
+    Name        = "ECS_SERVICE_NAME Parameter"
   }
 }

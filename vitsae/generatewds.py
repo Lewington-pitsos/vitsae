@@ -3,46 +3,41 @@ from threading import Thread
 import json
 import boto3
 import requests
-import pandas as pd
-from io import BytesIO
 import os
 import sys
 import time
-import tempfile
 import asyncio
 import aiohttp
 import pyarrow.parquet as pq
-import pyarrow as pa
-from six import b
 
 from utils import load_config
 from uploadwds import TarMaker
 from interruption import InterruptionHandler
 from constants import COUNTER_BATCH_ID, COUNTER_PQ_ID
 
-def initialize_boto3_clients(credentials):
+def initialize_boto3_clients(config):
     """
     Initialize AWS SQS and S3 clients using provided credentials.
     """
     sqs = boto3.client(
         'sqs',
-        aws_access_key_id=credentials['AWS_ACCESS_KEY'],
-        aws_secret_access_key=credentials['AWS_SECRET'],
-        region_name=credentials.get('AWS_REGION', 'us-east-1')
+        aws_access_key_id=config['AWS_ACCESS_KEY'],
+        aws_secret_access_key=config['AWS_SECRET'],
+        region_name=config.get('AWS_REGION', 'us-east-1')
     )
     s3 = boto3.client(
         's3',
-        aws_access_key_id=credentials['AWS_ACCESS_KEY'],
-        aws_secret_access_key=credentials['AWS_SECRET'],
-        region_name=credentials.get('AWS_REGION', 'us-east-1')
+        aws_access_key_id=config['AWS_ACCESS_KEY'],
+        aws_secret_access_key=config['AWS_SECRET'],
+        region_name=config.get('AWS_REGION', 'us-east-1')
     )
     ddb = boto3.resource(
         'dynamodb',
-        aws_access_key_id=credentials['AWS_ACCESS_KEY'],
-        aws_secret_access_key=credentials['AWS_SECRET'],
-        region_name=credentials.get('AWS_REGION', 'us-east-1')
+        aws_access_key_id=config['AWS_ACCESS_KEY'],
+        aws_secret_access_key=config['AWS_SECRET'],
+        region_name=config.get('AWS_REGION', 'us-east-1')
     )
-    ddb_table = ddb.Table(credentials.get('TABLE_NAME'))
+    ddb_table = ddb.Table(config.get('TABLE_NAME'))
 
     return sqs, s3, ddb_table
 
@@ -203,7 +198,6 @@ def process_parquet(
         next_idx = start_idx + batch_size
         prefix = f"{pq_id}-{start_idx}-{next_idx}"
         
-        time_every = 500
         async with aiohttp.ClientSession() as session:
             start = time.time()
             tasks = set()
@@ -225,16 +219,20 @@ def process_parquet(
                     # discard completed tasks to avoid memory leak
                     if len(tasks) >= concurrency:
                         while len(tasks) >= concurrency // 2:
-                            print('Waiting for tasks to complete...', len(tasks))
-                            _, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                            for completed_task in done:
+                                try:
+                                    _ = completed_task.result()
+                                except Exception as e:
+                                    print(f"Task resulted in an exception: {e}")
+                            tasks = set(pending)
                             time.sleep(0.5)
+                        print(f"Completed {concurrency // 2} images in {time.time() - start:.2f} seconds.")
+                        start = time.time()
+
 
                     tasks.add(asyncio.create_task(download_image(session, base_dir, prefix, index, row)))
                     
-                    if index % time_every == 0:
-                        print(f"Processed {time_every} images in {time.time() - start:.2f} seconds.")
-                        start = time.time()
-
             if tasks:
                 await asyncio.gather(*tasks)
 
@@ -258,16 +256,34 @@ def total_tar_files(ddb_table):
         print(f"Error retrieving already processed batches from DynamoDB: {e}")
         return 0
 
-def purge_queue(sqs, sqs_queue_url):
-    try:
-        response = sqs.purge_queue(QueueUrl=sqs_queue_url)
-        print(f'Purged all messages from the queue: {sqs_queue_url}')
-        return response
+def prevent_further_tasks(config):
+    cluster_name = config.get('ECS_CLUSTER_NAME')
+    service_name = config.get('ECS_SERVICE_NAME')
 
-    except sqs.exceptions.PurgeQueueInProgress as e:
-        print(f'Purge operation is already in progress. No need to purge a second time: {e}')
+    print(f"Setting desired task count to 0 for service '{service_name}' in cluster '{cluster_name}'.")
+    
+    ecs_client = boto3.client('ecs')
+    
+    try:
+        response = ecs_client.describe_services(
+            cluster=cluster_name,
+            services=[service_name]
+        )
+        
+        current_desired_count = response['services'][0]['desiredCount']
+        
+        if current_desired_count == 0:
+            print(f"The desired task count for service '{service_name}' in cluster '{cluster_name}' is already 0.")
+        else:
+            ecs_client.update_service(
+                cluster=cluster_name,
+                service=service_name,
+                desiredCount=0
+            )
+            print(f"Set the desired task count to 0 for service '{service_name}' in cluster '{cluster_name}'.")
+    
     except Exception as e:
-        print(f'Failed to purge the queue: {e}')
+        print(f"Failed to set desired task count: {e}")
 
 def generate_webdatasets(
     min_images_per_tar=15000,
@@ -286,11 +302,6 @@ def generate_webdatasets(
     s3_bucket_name = config.get('S3_BUCKET_NAME')
 
     hf_token = config.get('HF_TOKEN')
-
-    if not sqs_queue_url or not s3_bucket_name:
-        print("Error: 'SQS_QUEUE_URL' and 'S3_BUCKET_NAME' must be set in the credentials file.")
-        sys.exit(1)
-
     
     base_dir = 'cruft/images'
     if not os.path.exists(base_dir):
@@ -346,7 +357,7 @@ def generate_webdatasets(
                 total_tar_files_uploaded = get_upload_count(ddb_table)
 
                 if total_tar_files_uploaded * min_images_per_tar >= total_images_required:
-                    purge_queue(sqs, sqs_queue_url)
+                    prevent_further_tasks(config)
                     break
                 else:
                     delete_message(sqs, sqs_queue_url, message['ReceiptHandle'])
