@@ -420,15 +420,11 @@ resource "aws_ecs_task_definition" "tar_create_task" {
   execution_role_arn       = aws_iam_role.ecs_interface_role.arn
   task_role_arn            = aws_iam_role.ecs_interface_role.arn
 
-  ephemeral_storage {
-    size_in_gib = 25
-  }
-
   container_definitions = jsonencode([
     {
       name      = "ml-container"
       image     = "${var.file_ecr_url}:latest"
-      essential = false
+      essential = true
       memory    = var.container_memory
       cpu       = var.container_cpu
       stop_timeout = 60
@@ -459,11 +455,11 @@ resource "aws_ecs_task_definition" "tar_create_task" {
         },
         {
           name      = "ECS_CLUSTER_NAME"
-          value     = aws_ecs_cluster.ml_cluster.name
+          valueFrom = aws_ssm_parameter.ecs_cluster_name.arn
         },
         {
           name      = "ECS_SERVICE_NAME"
-          value     = var.tar_ecs_service_name
+          valueFrom = aws_ssm_parameter.ecs_service_name.arn
         }
       ]
       logConfiguration = {
