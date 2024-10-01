@@ -5,15 +5,17 @@ from collections import defaultdict
 import time
 from utils import load_config
 
-class FileBundler:
+from constants import COUNTER_BATCH_ID, COUNTER_PQ_ID
+
+class TarMaker:
     def __init__(self, 
                  watch_dir, 
                  upload_threshold, 
                  s3_client, 
                  s3_bucket, 
                  s3_prefix, 
-                 table,
-                 seconds_to_wait_before_upload=300
+                 ddb_table,
+                 wait_after_last_change=300
         ):
         self.file_counts = defaultdict(int)
         self.previous_file_counts = {}
@@ -22,10 +24,10 @@ class FileBundler:
         self.s3_client = s3_client
         self.s3_bucket = s3_bucket
         self.s3_prefix = s3_prefix
-        self.dd_table = table
+        self.dd_table = ddb_table
 
         self.seconds_since_change = {}
-        self.seconds_to_wait_before_upload = seconds_to_wait_before_upload
+        self.wait_after_last_change = wait_after_last_change
 
         self.stop = False
 
@@ -41,7 +43,7 @@ class FileBundler:
         for prefix, count in self.file_counts.items():
             if count == self.previous_file_counts.get(prefix, 0):
                 if prefix in self.seconds_since_change:
-                    if count > self.upload_threshold and time.time() - self.seconds_since_change.get(prefix, 0) > self.seconds_to_wait_before_upload:
+                    if count > self.upload_threshold and time.time() - self.seconds_since_change.get(prefix, 0) > self.wait_after_last_change:
                         pq_id, batch_id = self._get_ids_from_file(prefix)
                         self.bundle_and_upload_files(pq_id, batch_id)
                 else:
@@ -49,9 +51,7 @@ class FileBundler:
             else:
                 self.seconds_since_change[prefix] = time.time()
 
-        # Update previous counts for the next iteration
         self.previous_file_counts = self.file_counts.copy()
-        # Reset the file_counts for the next check
         self.file_counts.clear()
 
     def mark_as_uploaded(self, pq_id, batch_id):
@@ -64,6 +64,20 @@ class FileBundler:
                 }
             )
             print(f'Marked {pq_id}, {batch_id} as uploaded.', response)
+
+            counter_response = self.dd_table.update_item(
+                Key={
+                    'parquet_id': COUNTER_PQ_ID,
+                    'batch_id': COUNTER_BATCH_ID
+                },
+                UpdateExpression="ADD upload_count :increment",
+                ExpressionAttributeValues={
+                    ':increment': 1
+                },
+                ReturnValues="UPDATED_NEW"
+            )
+            print(f'Upload counter incremented. Current count: {counter_response["Attributes"]["upload_count"]}')
+
         except Exception as e:
             print(f'Failed to mark {pq_id}, {batch_id} as uploaded: {e}')
 
@@ -134,6 +148,6 @@ if __name__ == "__main__":
                       aws_secret_access_key=config['AWS_SECRET'],
                       region_name='us-east-1')
 
-    file_bundler = FileBundler(watch_dir, file_count_threshold, s3, config['S3_BUCKET_NAME'], s3_prefix, seconds_to_wait_before_upload=10)
+    file_bundler = TarMaker(watch_dir, file_count_threshold, s3, config['S3_BUCKET_NAME'], s3_prefix, seconds_to_wait_before_upload=10)
     
     file_bundler.keep_monitoring()

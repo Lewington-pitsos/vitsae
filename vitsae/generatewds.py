@@ -13,10 +13,12 @@ import asyncio
 import aiohttp
 import pyarrow.parquet as pq
 import pyarrow as pa
+from six import b
 
 from utils import load_config
-from uploadwds import FileBundler
+from uploadwds import TarMaker
 from interruption import InterruptionHandler
+from constants import COUNTER_BATCH_ID, COUNTER_PQ_ID
 
 def initialize_boto3_clients(credentials):
     """
@@ -98,21 +100,6 @@ def download_parquet(base_dir, url, hf_token):
             os.remove(temp_file_path)
         return None
 
-
-def download_image(image_url):
-    try:
-        response = requests.get(image_url, timeout=30)
-        response.raise_for_status()
-        return response.content
-    except Exception as e:
-        print(f"Error downloading image from {image_url}: {e}")
-        return None
-
-
-
-
-
-
 def iterate_parquet_rows(file_path, chunk_size=30000):
     try:
         pf = pq.ParquetFile(file_path)
@@ -137,8 +124,39 @@ def iterate_parquet_rows(file_path, chunk_size=30000):
         print(f"Error reading parquet file in chunks from {file_path}: {e}")
         return
 
-def process_parquet(base_dir, pq_path, pq_id, already_processed, max_images_per_tar=30000, concurrency=1000):
-    temp_dir = tempfile.mkdtemp()
+def get_upload_count(ddb_table):
+    try:
+        # Query the counter item using the 'upload_counter' and 'counter' identifiers
+        response = ddb_table.get_item(
+            Key={
+                'parquet_id': COUNTER_PQ_ID,
+                'batch_id': COUNTER_BATCH_ID
+            }
+        )
+        
+        # Extract the upload_count if it exists in the response
+        if 'Item' in response and 'upload_count' in response['Item']:
+            return response['Item']['upload_count']
+        else:
+            # If the item or upload_count attribute does not exist, return 0
+            return 0
+
+    except Exception as e:
+        print(f'Failed to get upload count: {e}')
+        return None
+
+
+def process_parquet(
+        ddb_table,
+        base_dir, 
+        pq_path, 
+        pq_id, 
+        already_processed, 
+        max_images_per_tar=30000, 
+        concurrency=500,
+        total_images_required=50_000_000,
+        min_images_per_tar=15000
+    ):
     loop = asyncio.get_event_loop()
 
     async def download_image(session, base_dir, prefix, index, row):
@@ -148,7 +166,7 @@ def process_parquet(base_dir, pq_path, pq_id, already_processed, max_images_per_
             return False  # Indicate that this image was not processed
 
         try:
-            async with session.get(image_url, timeout=30) as response:
+            async with session.get(image_url, timeout=14) as response:
                 if response.status == 200:
                     image_content = await response.read()
                     metadata = {
@@ -190,6 +208,10 @@ def process_parquet(base_dir, pq_path, pq_id, already_processed, max_images_per_
             start = time.time()
             tasks = set()
             for df in iterate_parquet_rows(pq_path):
+                total_tar_files_uploaded = get_upload_count(ddb_table)
+                if total_tar_files_uploaded * min_images_per_tar >= total_images_required:
+                    print(f"Uploaded at least {total_tar_files_uploaded * min_images_per_tar}. Job is complete.")
+                    break
                 for index, row in df.iterrows():
                     if index >= next_idx:
                         start_idx = next_idx
@@ -201,8 +223,8 @@ def process_parquet(base_dir, pq_path, pq_id, already_processed, max_images_per_
                         continue
 
                     # discard completed tasks to avoid memory leak
-                    if len(tasks) >= concurrency * 2:
-                        while len(tasks) >= concurrency:
+                    if len(tasks) >= concurrency:
+                        while len(tasks) >= concurrency // 2:
                             print('Waiting for tasks to complete...', len(tasks))
                             _, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
                             time.sleep(0.5)
@@ -218,15 +240,6 @@ def process_parquet(base_dir, pq_path, pq_id, already_processed, max_images_per_
 
     loop.run_until_complete(process_images(base_dir, pq_path, pq_id, max_images_per_tar, already_processed))
 
-    # Clean up the temporary directory and its contents
-    try:
-        for filename in os.listdir(temp_dir):
-            file_path = os.path.join(temp_dir, filename)
-            os.remove(file_path)
-        os.rmdir(temp_dir)
-    except OSError as e:
-        print(f"Error removing temporary directory: {e}")
-
 def get_already_processed_batches(ddb_table, pq_id):
     try:
         response = ddb_table.query(
@@ -236,11 +249,35 @@ def get_already_processed_batches(ddb_table, pq_id):
     except Exception as e:
         print(f"Error retrieving already processed batches from DynamoDB: {e}")
         return []
+    
+def total_tar_files(ddb_table):
+    try:
+        response = ddb_table.scan()
+        return len(response.get('Items', []))
+    except Exception as e:
+        print(f"Error retrieving already processed batches from DynamoDB: {e}")
+        return 0
 
-def generate_webdatasets():
-    """
-    Main function to continuously process messages from SQS.
-    """
+def purge_queue(sqs, sqs_queue_url):
+    try:
+        response = sqs.purge_queue(QueueUrl=sqs_queue_url)
+        print(f'Purged all messages from the queue: {sqs_queue_url}')
+        return response
+
+    except sqs.exceptions.PurgeQueueInProgress as e:
+        print(f'Purge operation is already in progress. No need to purge a second time: {e}')
+    except Exception as e:
+        print(f'Failed to purge the queue: {e}')
+
+def generate_webdatasets(
+    min_images_per_tar=15000,
+    wait_after_last_change=600,
+    initial_wait_time = 500,
+    max_images_per_tar=30000,
+    concurrency=800,
+    output_prefix='webdataset',
+    total_images_required=50_000_000
+):
     config = load_config()
     sqs, s3, ddb_table = initialize_boto3_clients(config)
 
@@ -259,52 +296,68 @@ def generate_webdatasets():
     if not os.path.exists(base_dir):
         os.makedirs(base_dir)
     
-    uploader = FileBundler(base_dir, 230, s3, s3_bucket_name, 'wds2', ddb_table, seconds_to_wait_before_upload=10)
+    uploader = TarMaker(base_dir, min_images_per_tar, s3, s3_bucket_name, output_prefix, ddb_table, wait_after_last_change=wait_after_last_change)
     t = Thread(target=uploader.keep_monitoring)
     t.start()
     
     print(f"Starting to process messages from SQS queue: {sqs_queue_url}")
     total_wait_time = 0
-    max_wait_time = 500
     while True:
         messages = receive_message(sqs, sqs_queue_url, wait_time=20)
         if not messages:
             total_wait_time += 20
             print(f"No messages available yet. Total wait time: {total_wait_time} seconds.")
 
-            if total_wait_time > max_wait_time:
-                print(f"No messages available for {max_wait_time} seconds terminating")
+            if total_wait_time > initial_wait_time:
+                print(f"No messages available for {initial_wait_time} seconds terminating")
                 break
+        else:
+            break
 
-            continue
+    for message in messages:
+        parquet_url = message['Body']
+        ih = InterruptionHandler(parquet_url, sqs_queue_url, sqs) # adds the pq message back into the queue if the spot instance is interrupted
+        try:
+            ih.start_listening()
 
-        for message in messages:
-            parquet_url = message['Body']
-            ih = InterruptionHandler(parquet_url, sqs_queue_url, sqs) # adds the pq message back into the queue if the spot instance is interrupted
-            try:
-                ih.start_listening()
+            print(f"Processing parquet file URL: {parquet_url}")
+            download_start = time.time()
 
-                print(f"Processing parquet file URL: {parquet_url}")
-                download_start = time.time()
+            pq_id, pq_path = download_parquet(base_dir, parquet_url, hf_token)
 
-                pq_id, pq_path = download_parquet(base_dir, parquet_url, hf_token)
+            print(f"Processing parquet with ID: {pq_id} downloaded in {time.time() - download_start:.2f} seconds.")
 
-                print(f"Processing parquet with ID: {pq_id} downloaded in {time.time() - download_start:.2f} seconds.")
+            already_processed = get_already_processed_batches(ddb_table, pq_id)        
 
-                already_processed = get_already_processed_batches(ddb_table, pq_id)        
-
-                if pq_path is not None:
-                    process_parquet(base_dir=base_dir, pq_path=pq_path, pq_id=pq_id, already_processed=already_processed, max_images_per_tar=500, concurrency=500)
-                    delete_message(sqs, sqs_queue_url, message['ReceiptHandle'])
-                    ih.stop_listening() # the parquet time_everyhas been completed, we never want to add it back to the queue now.
-                    print(f"Deleted message from SQS: {message.get('MessageId')}")
-                else:
-                    print(f"Failed to process parquet file from URL: {parquet_url}. Message not deleted for retry.")
-            except Exception as e:
-                print(f"Error processing message: {e}")
+            if pq_path is not None:
+                process_parquet(
+                    ddb_table=ddb_table,
+                    base_dir=base_dir, 
+                    pq_path=pq_path, 
+                    pq_id=pq_id, 
+                    already_processed=already_processed, 
+                    max_images_per_tar=max_images_per_tar, 
+                    concurrency=concurrency,
+                    total_images_required=total_images_required,
+                    min_images_per_tar=min_images_per_tar
+                )
                 ih.stop_listening()
-                ih.add_pq_back()
-                continue
+
+                total_tar_files_uploaded = get_upload_count(ddb_table)
+
+                if total_tar_files_uploaded * min_images_per_tar >= total_images_required:
+                    purge_queue(sqs, sqs_queue_url)
+                    break
+                else:
+                    delete_message(sqs, sqs_queue_url, message['ReceiptHandle'])
+                    print(f"Deleted message from SQS: {message.get('MessageId')}")
+            else:
+                print(f"Failed to process parquet file from URL: {parquet_url}. Message not deleted for retry.")
+        except Exception as e:
+            print(f"Error processing message: {e}")
+            ih.stop_listening()
+            ih.add_pq_back()
+            continue
 
     uploader.finalize()
     t.join()

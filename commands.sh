@@ -16,14 +16,7 @@ terraform output ecr_repository_url
 
 aws ecr list-images --repository-name file-ecr --region us-east-1
 
-docker run -it \
-  -e HF_TOKEN=$HF_TOKEN \
-  -e AWS_ACCESS_KEY=$AWS_ACCESS_KEY \
-  -e AWS_SECRET=$AWS_SECRET \
-  -e SQS_QUEUE_URL=$SQS_QUEUE_URL \
-  -e S3_BUCKET_NAME=$S3_BUCKET_NAME \
-  -e TABLE_NAME=$TABLE_NAME \
-  304905445943.dkr.ecr.us-east-1.amazonaws.com/file-ecr
-
+docker build -t file-ecr-localtest .
+docker run -e HF_TOKEN=$HF_TOKEN -e AWS_ACCESS_KEY=$AWS_ACCESS_KEY -e AWS_SECRET=$AWS_SECRET -e SQS_QUEUE_URL=$SQS_QUEUE_URL -e S3_BUCKET_NAME=$S3_BUCKET_NAME -e TABLE_NAME=$TABLE_NAME file-ecr-localtest
 
 aws autoscaling describe-auto-scaling-groups --query "AutoScalingGroups[?contains(AutoScalingGroupName, 'ecs-autoscaling-group')]"

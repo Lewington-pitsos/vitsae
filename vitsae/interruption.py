@@ -1,6 +1,7 @@
 import time
 import threading
 import requests
+import signal
 
 def check_for_interruption():
     try:
@@ -23,6 +24,8 @@ class InterruptionHandler():
 
         self.interrupt_fn = interrupt_fn
 
+        signal.signal(signal.SIGTERM, self.handle_sigterm)
+
     def listen(self):
         while not self._stop:
             if self.interrupt_fn():
@@ -37,8 +40,7 @@ class InterruptionHandler():
 
             self.sqs_client.send_message(QueueUrl=self.queue_url, MessageBody=url)
         else:
-            print("message has already been added back to the queue")
-
+            print("Message has already been added back to the queue")
 
     def start_listening(self):
         self.listener_thread = threading.Thread(target=self.listen, daemon=True)
@@ -51,3 +53,8 @@ class InterruptionHandler():
 
     def stop(self):
         self._stop = True
+
+    def handle_sigterm(self, signum, frame):
+        print("Received SIGTERM signal. Performing cleanup...")
+        self.add_pq_back()
+        self.stop()

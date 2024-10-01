@@ -410,13 +410,18 @@ resource "aws_ecs_task_definition" "tar_create_task" {
   execution_role_arn       = aws_iam_role.ecs_interface_role.arn
   task_role_arn            = aws_iam_role.ecs_interface_role.arn
 
+  ephemeral_storage {
+    size_in_gb = 25
+  }
+
   container_definitions = jsonencode([
     {
       name      = "ml-container"
       image     = "${var.file_ecr_url}:latest"
-      essential = true
+      essential = false
       memory    = var.container_memory
       cpu       = var.container_cpu
+      stop_timeout = 60
       secrets = [
         {
           name      = "HF_TOKEN"
