@@ -1,5 +1,3 @@
-# main.tf
-
 provider "aws" {
   region = var.region
 }
@@ -52,7 +50,7 @@ resource "aws_internet_gateway" "igw" {
 
 # Create NAT Gateway for the private subnet
 resource "aws_eip" "nat_eip" {
-  vpc = true
+  domain = "vpc"
 }
 
 resource "aws_nat_gateway" "nat_gw" {
@@ -141,12 +139,25 @@ resource "aws_sqs_queue" "parquet_file_queue" {
 #######################################
 
 # ECS Cluster
-resource "aws_ecs_cluster" "ml_cluster" {
+resource "aws_ecs_cluster" "activation_cluster" {
   name = var.cluster_name
 
   tags = {
     Name        = "ML ECS Cluster"
     Environment = var.environment
+  }
+}
+
+
+resource "aws_ecs_cluster_capacity_providers" "activation_cluster_capacity_providers" {
+  cluster_name = aws_ecs_cluster.activation_cluster.name
+
+  capacity_providers = [aws_ecs_capacity_provider.ecs_capacity_provider.name]
+
+  default_capacity_provider_strategy {
+    capacity_provider = aws_ecs_capacity_provider.ecs_capacity_provider.name
+    weight            = 1
+    base              = 0
   }
 }
 
@@ -230,7 +241,8 @@ resource "aws_iam_policy" "ecs_task_policy" {
         Action = [
           "ssm:GetParameters",
           "ssm:GetParameter",
-          "ssm:GetParameterHistory"
+          "ssm:GetParameterHistory",
+          "kms:Decrypt"
         ]
         Resource = [
           aws_ssm_parameter.hf_token.arn,
@@ -335,20 +347,18 @@ data "aws_ami" "ecs_optimized" {
 resource "aws_launch_template" "ecs_launch_template" {
   name_prefix   = "ecs-launch-template-"
   image_id      = data.aws_ami.ecs_optimized.id
-  instance_type = var.instance_type
-
 
   iam_instance_profile {
     name = aws_iam_instance_profile.ecs_instance_profile.name
   }
 
-  instance_market_options {
-    market_type = "spot"
-    spot_options {
-      spot_instance_type             = "one-time"
-      instance_interruption_behavior = "terminate"
-    }
-  }
+  # instance_market_options {
+  #   market_type = "spot"
+  #   spot_options {
+  #     spot_instance_type             = "one-time"
+  #     instance_interruption_behavior = "terminate"
+  #   }
+  # }
 
   network_interfaces {
     associate_public_ip_address = true
@@ -358,7 +368,7 @@ resource "aws_launch_template" "ecs_launch_template" {
 
   user_data = base64encode(<<EOF
 #!/bin/bash
-echo ECS_CLUSTER=${aws_ecs_cluster.ml_cluster.name} >> /etc/ecs/ecs.config
+echo ECS_CLUSTER=${aws_ecs_cluster.activation_cluster.name} >> /etc/ecs/ecs.config
 EOF
 )
 
@@ -381,17 +391,47 @@ EOF
   }
 }
 
-
-# Auto Scaling Group for ECS Instances
-
 resource "aws_autoscaling_group" "ecs_autoscaling_group" {
-  name                      = "ecs-autoscaling-group"
-  max_size                  = var.max_size
-  min_size                  = var.min_size
-  desired_capacity          = var.desired_capacity
-  launch_template {
-    id      = aws_launch_template.ecs_launch_template.id
-    version = "$Latest"
+  name             = "ecs-autoscaling-group"
+  max_size         = var.max_size          # Set as appropriate
+  min_size         = 0                     # Allow scaling down to zero
+  desired_capacity = 0                     # Start with zero instances
+
+  protect_from_scale_in = true 
+
+  mixed_instances_policy {
+    launch_template {
+      launch_template_specification {
+        launch_template_id = aws_launch_template.ecs_launch_template.id
+        version            = "$Latest"
+      }
+
+      override {
+        instance_type = "m4.large"
+      }
+      override {
+        instance_type = "m4.xlarge"
+      }
+
+      override {
+        instance_type = "t3.small"
+      }
+
+      override {
+        instance_type = "t3.medium"
+      }
+
+      override {
+        instance_type = "t3.large"
+      }
+    }
+
+    instances_distribution {
+      on_demand_percentage_above_base_capacity = 0
+      spot_allocation_strategy                 = "lowest-price"
+      spot_instance_pools                      = 3
+    }
+
   }
 
   vpc_zone_identifier = [aws_subnet.private_subnet.id]
@@ -410,6 +450,25 @@ resource "aws_autoscaling_group" "ecs_autoscaling_group" {
 
   lifecycle {
     create_before_destroy = true
+  }
+}
+
+resource "aws_ecs_capacity_provider" "ecs_capacity_provider" {
+  name = "${var.environment}-capacity-provider"
+
+  auto_scaling_group_provider {
+    auto_scaling_group_arn         = aws_autoscaling_group.ecs_autoscaling_group.arn
+    managed_scaling {
+      status                    = "ENABLED"
+      target_capacity           = 100
+      minimum_scaling_step_size = 1
+      maximum_scaling_step_size = 1000
+    }
+    managed_termination_protection = "ENABLED"
+  }
+
+  tags = {
+    Environment = var.environment
   }
 }
 
@@ -491,16 +550,21 @@ resource "aws_cloudwatch_log_group" "ecs_log_group" {
 
 
 # Update ECS Service Configuration to Use New Subnets
-resource "aws_ecs_service" "ml_service" {
+resource "aws_ecs_service" "tar_service" {
   name            = var.tar_ecs_service_name
-  cluster         = aws_ecs_cluster.ml_cluster.id
+  cluster         = aws_ecs_cluster.activation_cluster.id
   task_definition = aws_ecs_task_definition.tar_create_task.arn
   desired_count   = var.service_desired_count
-  launch_type     = "EC2"
+
+  capacity_provider_strategy {
+    capacity_provider = aws_ecs_capacity_provider.ecs_capacity_provider.name
+    weight            = 1
+    base              = 0
+  }
 
   network_configuration {
-    subnets          = [aws_subnet.private_subnet.id]
-    security_groups  = [aws_security_group.ecs_security_group.id]
+    subnets         = [aws_subnet.private_subnet.id]
+    security_groups = [aws_security_group.ecs_security_group.id]
   }
 
   deployment_maximum_percent         = 200
@@ -514,6 +578,7 @@ resource "aws_ecs_service" "ml_service" {
     aws_cloudwatch_log_group.ecs_log_group
   ]
 }
+
 resource "aws_dynamodb_table" "laion_batches" {
   name           = var.dynamodb_table_name
   billing_mode   = "PAY_PER_REQUEST"
@@ -617,7 +682,7 @@ resource "aws_ssm_parameter" "ecs_cluster_name" {
   name        = "${var.environment}-ecs-cluster-name"
   description = "ECS_CLUSTER_NAME for ECS tasks"
   type        = "String"
-  value       = aws_ecs_cluster.ml_cluster.name
+  value       = aws_ecs_cluster.activation_cluster.name
 
   tags = {
     Environment = var.environment

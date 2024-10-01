@@ -90,30 +90,11 @@ variable "tar_ecs_service_name" {
   default     = "tar-ecs-service"
 }
 
-# EC2 Instance Variables
-variable "instance_type" {
-  description = "EC2 instance type (e.g., g4dn.xlarge for GPU instances)"
-  type        = string
-  default     = "t2.small"
-}
-
 # Auto Scaling Group Variables
 variable "max_size" {
   description = "Maximum size of the Auto Scaling Group"
   type        = number
   default     = 5
-}
-
-variable "min_size" {
-  description = "Minimum size of the Auto Scaling Group"
-  type        = number
-  default     = 1
-}
-
-variable "desired_capacity" {
-  description = "Desired capacity of the Auto Scaling Group"
-  type        = number
-  default     = 2
 }
 
 variable "my_ip_cidr_block" {
@@ -126,8 +107,6 @@ variable "dynamodb_table_name" {
   type        = string
   default     = "laion-batches"
 }
-
-
 
 #### secert related #####
 

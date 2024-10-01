@@ -20,12 +20,12 @@ output "sqs_queue_arn" {
 # ECS Cluster Outputs
 output "ecs_cluster_id" {
   description = "ID of the ECS cluster"
-  value       = aws_ecs_cluster.ml_cluster.id
+  value       = aws_ecs_cluster.activation_cluster.id
 }
 
 output "ecs_service_name" {
   description = "Name of the ECS service"
-  value       = aws_ecs_service.ml_service.name
+  value       = aws_ecs_service.tar_service.name
 }
 
 output "ecs_task_definition" {
