@@ -84,6 +84,12 @@ variable "service_desired_count" {
   default     = 2
 }
 
+variable "tar_ecs_service_name" {
+  description = "Name of the ECS service"
+  type        = string
+  default     = "tar-ecs-service"
+}
+
 # EC2 Instance Variables
 variable "instance_type" {
   description = "EC2 instance type (e.g., g4dn.xlarge for GPU instances)"

@@ -421,7 +421,7 @@ resource "aws_ecs_task_definition" "tar_create_task" {
   task_role_arn            = aws_iam_role.ecs_interface_role.arn
 
   ephemeral_storage {
-    size_in_gb = 25
+    size_in_gib = 25
   }
 
   container_definitions = jsonencode([
@@ -463,7 +463,7 @@ resource "aws_ecs_task_definition" "tar_create_task" {
         },
         {
           name      = "ECS_SERVICE_NAME"
-          value     = aws_ecs_service.ml_service.name
+          value     = var.tar_ecs_service_name
         }
       ]
       logConfiguration = {
@@ -496,7 +496,7 @@ resource "aws_cloudwatch_log_group" "ecs_log_group" {
 
 # Update ECS Service Configuration to Use New Subnets
 resource "aws_ecs_service" "ml_service" {
-  name            = "ml-service"
+  name            = var.tar_ecs_service_name
   cluster         = aws_ecs_cluster.ml_cluster.id
   task_definition = aws_ecs_task_definition.tar_create_task.arn
   desired_count   = var.service_desired_count
@@ -633,7 +633,7 @@ resource "aws_ssm_parameter" "ecs_service_name" {
   name        = "${var.environment}-ecs-service-name"
   description = "ECS_SERVICE_NAME for ECS tasks"
   type        = "String"
-  value       = aws_ecs_service.ml_service.name
+  value       = var.tar_ecs_service_name
 
   tags = {
     Environment = var.environment
