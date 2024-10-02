@@ -409,7 +409,8 @@ resource "aws_autoscaling_group" "ecs_autoscaling_group" {
   max_size         = var.max_size          # Set as appropriate
   min_size         = 0                     # Allow scaling down to zero
   desired_capacity = 0                     # Start with zero instances
-  protect_from_scale_in = var.die_now ? false : true
+  # protect_from_scale_in = var.die_now ? false : true
+  protect_from_scale_in = false
 
   mixed_instances_policy {
     launch_template {
@@ -476,9 +477,12 @@ resource "aws_ecs_capacity_provider" "ecs_capacity_provider" {
 
   auto_scaling_group_provider {
     auto_scaling_group_arn         = aws_autoscaling_group.ecs_autoscaling_group.arn
-    managed_termination_protection = var.die_now ? "DISABLED" : "ENABLED" # enable this when we have worked out how to destroy
+    # managed_termination_protection = var.die_now ? "DISABLED" : "ENABLED" # enable this when we have worked out how to destroy
+    managed_draining = "DISABLED"
+    managed_termination_protection = "DISABLED"
     managed_scaling {
-      status = var.die_now ? "DISABLED" : "ENABLED" 
+      # status = var.die_now ? "DISABLED" : "ENABLED" 
+      status = "ENABLED"
       target_capacity           = 100
       minimum_scaling_step_size = 1
       maximum_scaling_step_size = 1000

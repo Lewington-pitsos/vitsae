@@ -4,7 +4,6 @@ import boto3
 from collections import defaultdict
 import time
 
-from regex import P
 from utils import load_config
 import PIL
 
