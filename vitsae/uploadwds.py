@@ -10,21 +10,26 @@ from constants import COUNTER_BATCH_ID, COUNTER_PQ_ID
 class TarMaker:
     def __init__(self, 
                  watch_dir, 
-                 upload_threshold, 
+                 min_images_per_tar, 
                  s3_client, 
-                 s3_bucket, 
+                 s3_bucket_name, 
                  s3_prefix, 
                  ddb_table,
+                 sqs_client,
+                 tar_queue_url,
                  wait_after_last_change=300
         ):
         self.file_counts = defaultdict(int)
         self.previous_file_counts = {}
         self.watch_dir = watch_dir
-        self.upload_threshold = upload_threshold
+        self.upload_threshold = min_images_per_tar
         self.s3_client = s3_client
-        self.s3_bucket = s3_bucket
+        self.s3_bucket = s3_bucket_name
         self.s3_prefix = s3_prefix
         self.dd_table = ddb_table
+
+        self.sqs_client = sqs_client
+        self.tar_queue_url = tar_queue_url
 
         self.seconds_since_change = {}
         self.wait_after_last_change = wait_after_last_change
@@ -76,6 +81,8 @@ class TarMaker:
                 },
                 ReturnValues="UPDATED_NEW"
             )
+
+        
             print(f'Upload counter incremented. Current count: {counter_response["Attributes"]["upload_count"]}')
 
         except Exception as e:
@@ -92,22 +99,29 @@ class TarMaker:
                 file_path = os.path.join(self.watch_dir, file_name)
                 tar.add(file_path, arcname=file_name)
         
-        self.upload_to_s3(tar_filename, prefix)
-        self.mark_as_uploaded(pq_id, batch_id)
+        s3_path = self.upload_to_s3(tar_filename, prefix)
+        if s3_path:
+            self.mark_as_uploaded(pq_id, batch_id)
+            self.sqs_client.send_message(QueueUrl=self.tar_queue_url, MessageBody=s3_path)
 
-        os.remove(tar_filename)
-        for file_name in files_to_bundle:
-            os.remove(os.path.join(self.watch_dir, file_name))
+            if os.path.exists(tar_filename):
+                os.remove(tar_filename)
+            for file_name in files_to_bundle:
+                if os.path.exists(os.path.join(self.watch_dir, file_name)):
+                    os.remove(os.path.join(self.watch_dir, file_name))
 
-        self.previous_file_counts[prefix] = 0
+            self.previous_file_counts[prefix] = 0
 
     def upload_to_s3(self, tar_filename, prefix):
         try:
             s3_key = os.path.join(self.s3_prefix, f'{prefix}.tar')
             self.s3_client.upload_file(tar_filename, self.s3_bucket, s3_key)
             print(f'Successfully uploaded {tar_filename} to s3://{self.s3_bucket}/{s3_key}')
+
+            return f's3://{self.s3_bucket}/{s3_key}'
         except Exception as e:
             print(f'Failed to upload {tar_filename} to S3: {e}')
+            return None
 
     def update_file_counts(self):
         for file_name in os.listdir(self.watch_dir):

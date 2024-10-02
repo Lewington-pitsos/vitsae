@@ -7,6 +7,7 @@ def load_config():
         'AWS_ACCESS_KEY',
         'AWS_SECRET',
         'SQS_QUEUE_URL',
+        'SQS_TAR_QUEUE_URL',
         'S3_BUCKET_NAME',
         'TABLE_NAME',
         'ECS_CLUSTER_NAME',

@@ -17,6 +17,17 @@ output "sqs_queue_arn" {
   value       = aws_sqs_queue.parquet_file_queue.arn
 }
 
+
+output "sqs_tar_queue_url" {
+  description = "URL of the SQS tar queue"
+  value       = aws_sqs_queue.tar_file_queue.url
+}
+
+output "sqs_tar_queue_arn" {
+  description = "ARN of the SQS tar queue"
+  value       = aws_sqs_queue.tar_file_queue.arn
+}
+
 # ECS Cluster Outputs
 output "ecs_cluster_id" {
   description = "ID of the ECS cluster"

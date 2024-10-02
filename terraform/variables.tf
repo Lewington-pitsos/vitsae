@@ -133,3 +133,8 @@ variable "aws_secret" {
 
 
 
+variable "tar_queue_name" {
+  description = "Name of the SQS queue containing uploaded batches"
+  type        = string
+  default     = "tar-queue"
+}

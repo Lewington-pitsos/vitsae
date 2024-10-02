@@ -134,6 +134,19 @@ resource "aws_sqs_queue" "parquet_file_queue" {
   }
 }
 
+resource "aws_sqs_queue" "tar_file_queue" {
+  name                        = var.tar_queue_name
+  visibility_timeout_seconds  = var.visibility_timeout
+  message_retention_seconds   = var.message_retention
+  receive_wait_time_seconds   = var.receive_wait_time
+  delay_seconds               = var.delay_seconds
+
+  tags = {
+    Name        = "Tar File Queue"
+    Environment = var.environment
+  }
+}
+
 #######################################
 # 5. ECS Cluster with G6 Spot Instances
 #######################################
@@ -212,6 +225,11 @@ resource "aws_iam_policy" "ecs_task_policy" {
         Resource = aws_sqs_queue.parquet_file_queue.arn
       },
       {
+        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
+        Effect   = "Allow"
+        Resource = aws_sqs_queue.tar_file_queue.arn
+      },
+      {
         Action   = [
           "ecr:GetDownloadUrlForLayer",
           "ecr:BatchGetImage",
@@ -249,6 +267,7 @@ resource "aws_iam_policy" "ecs_task_policy" {
           aws_ssm_parameter.aws_access_key.arn,
           aws_ssm_parameter.aws_secret.arn,
           aws_ssm_parameter.parquet_file_queue_url.arn,
+          aws_ssm_parameter.tar_file_queue_url.arn,
           aws_ssm_parameter.model_outputs_bucket_name.arn,
           aws_ssm_parameter.table_name.arn,
           aws_ssm_parameter.ecs_cluster_name.arn,       # Add this line
@@ -488,6 +507,10 @@ resource "aws_ecs_task_definition" "tar_create_task" {
           valueFrom = aws_ssm_parameter.parquet_file_queue_url.arn
         },
         {
+          name      = "SQS_TAR_QUEUE_URL"
+          valueFrom = aws_ssm_parameter.tar_file_queue_url.arn
+        },
+        {
           name      = "S3_BUCKET_NAME"
           valueFrom = aws_ssm_parameter.model_outputs_bucket_name.arn
         },
@@ -634,6 +657,19 @@ resource "aws_ssm_parameter" "parquet_file_queue_url" {
   tags = {
     Environment = var.environment
     Name        = "SQS_QUEUE_URL Parameter"
+  }
+}
+
+
+resource "aws_ssm_parameter" "tar_file_queue_url" {
+  name        = "${var.environment}-sqs-tar-queue-url"
+  description = "SQS_TAR_QUEUE_URL for ECS tasks"
+  type        = "String"
+  value       = aws_sqs_queue.tar_file_queue.url
+
+  tags = {
+    Environment = var.environment
+    Name        = "SQS_TAR_QUEUE_URL Parameter"
   }
 }
 

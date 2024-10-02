@@ -4,7 +4,6 @@ import json
 import boto3
 import requests
 import os
-import sys
 import time
 import asyncio
 import aiohttp
@@ -291,8 +290,9 @@ def generate_webdatasets(
     initial_wait_time = 500,
     max_images_per_tar=30000,
     concurrency=800,
-    output_prefix='webdataset',
-    total_images_required=50_000_000
+    s3_output_prefix='webdataset',
+    total_images_required=50_000_000,
+    base_dir = '../cruft/images'
 ):
     config = load_config()
     sqs, s3, ddb_table = initialize_boto3_clients(config)
@@ -303,11 +303,20 @@ def generate_webdatasets(
 
     hf_token = config.get('HF_TOKEN')
     
-    base_dir = 'cruft/images'
     if not os.path.exists(base_dir):
         os.makedirs(base_dir)
     
-    uploader = TarMaker(base_dir, min_images_per_tar, s3, s3_bucket_name, output_prefix, ddb_table, wait_after_last_change=wait_after_last_change)
+    uploader = TarMaker(
+        watch_dir=base_dir, 
+        min_images_per_tar=min_images_per_tar, 
+        s3_client=s3, 
+        s3_bucket_name=s3_bucket_name, 
+        s3_prefix=s3_output_prefix, 
+        ddb_table=ddb_table,
+        sqs_client=sqs,
+        tar_queue_url=config.get('SQS_TAR_QUEUE_URL'), 
+        wait_after_last_change=wait_after_last_change
+    )
     t = Thread(target=uploader.keep_monitoring)
     t.start()
     
