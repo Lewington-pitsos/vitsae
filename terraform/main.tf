@@ -251,6 +251,8 @@ resource "aws_iam_policy" "ecs_task_policy" {
           aws_ssm_parameter.parquet_file_queue_url.arn,
           aws_ssm_parameter.model_outputs_bucket_name.arn,
           aws_ssm_parameter.table_name.arn,
+          aws_ssm_parameter.ecs_cluster_name.arn,       # Add this line
+          aws_ssm_parameter.ecs_service_name.arn        # Add this line
         ]
       },
       {
@@ -352,14 +354,6 @@ resource "aws_launch_template" "ecs_launch_template" {
     name = aws_iam_instance_profile.ecs_instance_profile.name
   }
 
-  # instance_market_options {
-  #   market_type = "spot"
-  #   spot_options {
-  #     spot_instance_type             = "one-time"
-  #     instance_interruption_behavior = "terminate"
-  #   }
-  # }
-
   network_interfaces {
     associate_public_ip_address = true
     delete_on_termination       = true
@@ -397,8 +391,6 @@ resource "aws_autoscaling_group" "ecs_autoscaling_group" {
   min_size         = 0                     # Allow scaling down to zero
   desired_capacity = 0                     # Start with zero instances
 
-  protect_from_scale_in = true 
-
   mixed_instances_policy {
     launch_template {
       launch_template_specification {
@@ -411,10 +403,6 @@ resource "aws_autoscaling_group" "ecs_autoscaling_group" {
       }
       override {
         instance_type = "m4.xlarge"
-      }
-
-      override {
-        instance_type = "t3.small"
       }
 
       override {
@@ -447,10 +435,6 @@ resource "aws_autoscaling_group" "ecs_autoscaling_group" {
     value               = var.environment
     propagate_at_launch = true
   }
-
-  lifecycle {
-    create_before_destroy = true
-  }
 }
 
 resource "aws_ecs_capacity_provider" "ecs_capacity_provider" {
@@ -464,7 +448,6 @@ resource "aws_ecs_capacity_provider" "ecs_capacity_provider" {
       minimum_scaling_step_size = 1
       maximum_scaling_step_size = 1000
     }
-    managed_termination_protection = "ENABLED"
   }
 
   tags = {

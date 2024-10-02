@@ -7,7 +7,9 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-boto3 = "^1.35.29"
+sache = {git = "https://github.com/lewington-pitsos/sache.git"}
+webdataset = "^0.2.100"
+pytest = "8.3.1"
 
 
 [build-system]
