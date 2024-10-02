@@ -10,6 +10,7 @@ python = "^3.11"
 sache = {git = "https://github.com/lewington-pitsos/sache.git"}
 webdataset = "^0.2.100"
 pytest = "8.3.1"
+pillow = "^10.4.0"
 
 
 [build-system]

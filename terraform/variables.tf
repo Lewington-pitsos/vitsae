@@ -131,6 +131,9 @@ variable "aws_secret" {
 
 
 
+variable "die_now" {
+  default = false
+}
 
 
 variable "tar_queue_name" {

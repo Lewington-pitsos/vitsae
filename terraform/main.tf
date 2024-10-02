@@ -409,6 +409,7 @@ resource "aws_autoscaling_group" "ecs_autoscaling_group" {
   max_size         = var.max_size          # Set as appropriate
   min_size         = 0                     # Allow scaling down to zero
   desired_capacity = 0                     # Start with zero instances
+  protect_from_scale_in = var.die_now ? false : true
 
   mixed_instances_policy {
     launch_template {
@@ -443,6 +444,13 @@ resource "aws_autoscaling_group" "ecs_autoscaling_group" {
 
   vpc_zone_identifier = [aws_subnet.private_subnet.id]
 
+  initial_lifecycle_hook {
+    name                 = "ecs-managed-draining-termination-hook"
+    default_result       = "CONTINUE"
+    heartbeat_timeout    = 120
+    lifecycle_transition = "autoscaling:EC2_INSTANCE_TERMINATING"
+  }
+
   tag {
     key                 = "Name"
     value               = "ECS Instance"
@@ -454,6 +462,13 @@ resource "aws_autoscaling_group" "ecs_autoscaling_group" {
     value               = var.environment
     propagate_at_launch = true
   }
+
+  tag {
+    key                 = "AmazonECSManaged"
+    value               = true
+    propagate_at_launch = true
+  }
+
 }
 
 resource "aws_ecs_capacity_provider" "ecs_capacity_provider" {
@@ -461,8 +476,9 @@ resource "aws_ecs_capacity_provider" "ecs_capacity_provider" {
 
   auto_scaling_group_provider {
     auto_scaling_group_arn         = aws_autoscaling_group.ecs_autoscaling_group.arn
+    managed_termination_protection = var.die_now ? "DISABLED" : "ENABLED" # enable this when we have worked out how to destroy
     managed_scaling {
-      status                    = "ENABLED"
+      status = var.die_now ? "DISABLED" : "ENABLED" 
       target_capacity           = 100
       minimum_scaling_step_size = 1
       maximum_scaling_step_size = 1000
@@ -574,7 +590,7 @@ resource "aws_ecs_service" "tar_service" {
   }
 
   deployment_maximum_percent         = 200
-  deployment_minimum_healthy_percent = 50
+  deployment_minimum_healthy_percent = 70
 
   tags = {
     Environment = var.environment

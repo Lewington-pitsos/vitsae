@@ -44,3 +44,5 @@ vitsae/cruft
 
 **/vitsae/*.parquet
 cruft
+
+**/pad.py

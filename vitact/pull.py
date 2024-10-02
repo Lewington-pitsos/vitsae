@@ -20,12 +20,9 @@ def load_config():
         'TABLE_NAME': table_name
     }
 
-# Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 config = load_config()
 
-# Initialize S3 and SQS clients
 s3 = boto3.client('s3')
 sqs = boto3.client('sqs')
 
@@ -36,7 +33,6 @@ def get_local_tar_count(local_dir):
 def download_from_s3(local_dir, bucket_name, key):
     """Downloads a file from S3 and deletes it from the bucket."""
     local_filename = os.path.join(local_dir, os.path.basename(key))
-    # Download the file
     s3.download_file(bucket_name, key, local_filename)
     logging.info(f'Downloaded {key} to {local_filename}')
     os.rename(local_filename, local_filename.replace('.tar', '.ready.tar'))

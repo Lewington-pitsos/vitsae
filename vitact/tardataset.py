@@ -1,3 +1,4 @@
+from dol.base import Val
 import torch
 from torch.utils.data import IterableDataset
 import os
@@ -17,12 +18,8 @@ class StreamingDataset(IterableDataset):
 
     def __iter__(self):
         worker_info = torch.utils.data.get_worker_info()
-        if worker_info is None:
-            worker_id = 0
-            num_workers = 1
-        else:
-            worker_id = worker_info.id
-            num_workers = worker_info.num_workers
+        if worker_info is not None:
+            raise ValueError("This dataset is not compatible with multi-process loading.")
 
         while True:
             tar_files = self._get_tar_files()
@@ -32,7 +29,7 @@ class StreamingDataset(IterableDataset):
 
             # Create a WebDataset pipeline for each tar file
             for tar_file in tar_files:
-                dataset = wds.WebDataset(tar_file).with_worker(worker_id, num_workers)
+                dataset = wds.WebDataset(tar_file)
                 for sample in dataset:
                     yield sample
 

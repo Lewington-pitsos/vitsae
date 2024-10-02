@@ -3,7 +3,11 @@ import tarfile
 import boto3
 from collections import defaultdict
 import time
+
+from regex import P
 from utils import load_config
+import PIL
+
 
 from constants import COUNTER_BATCH_ID, COUNTER_PQ_ID
 
@@ -91,13 +95,20 @@ class TarMaker:
     def bundle_and_upload_files(self, pq_id, batch_id):
         prefix = f'{pq_id}-{batch_id}'
 
-        files_to_bundle = [f for f in os.listdir(self.watch_dir) if f.startswith(prefix)]
+        files_to_bundle = sorted([f for f in os.listdir(self.watch_dir) if f.startswith(prefix)])
         tar_filename = os.path.join(self.watch_dir, f'{prefix}.tar')
 
         with tarfile.open(tar_filename, 'w') as tar:
             for file_name in files_to_bundle:
                 file_path = os.path.join(self.watch_dir, file_name)
-                tar.add(file_path, arcname=file_name)
+                
+                try:
+                    with PIL.Image.open(file_path) as img:
+                        pass
+                    tar.add(file_path, arcname=file_name)
+                except PIL.UnidentifiedImageError:
+                    continue
+
         
         s3_path = self.upload_to_s3(tar_filename, prefix)
         if s3_path:
@@ -107,8 +118,9 @@ class TarMaker:
             if os.path.exists(tar_filename):
                 os.remove(tar_filename)
             for file_name in files_to_bundle:
-                if os.path.exists(os.path.join(self.watch_dir, file_name)):
-                    os.remove(os.path.join(self.watch_dir, file_name))
+                local_file_path = os.path.join(self.watch_dir, file_name)
+                if os.path.exists(local_file_path):
+                    os.remove(local_file_path)
 
             self.previous_file_counts[prefix] = 0
 
