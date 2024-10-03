@@ -1,14 +1,26 @@
+from torch.utils import data
 from tardataset import StreamingDataset
 from PIL import Image
 import io
 import webdataset as wds
+import os
 
 def test_loads_tar():
-    dataset = StreamingDataset('test/tars')
+    test_data = 'test/tars'
 
-    for sample in dataset:
+    # copy test data to new directory
+    new_dir = 'test/tars-tmp'
+    os.makedirs(new_dir, exist_ok=True)
+    
+    for tar_file in os.listdir(test_data):
+        tar_file_path = os.path.join(test_data, tar_file)
+        new_tar_file_path = os.path.join(new_dir, tar_file)
+        os.system(f'cp {tar_file_path} {new_tar_file_path}')
+
+    dataset = StreamingDataset(new_dir)
+
+    for i, sample in enumerate(dataset):
         image_data = sample['jpg']
-        print(sample.keys())
         assert 'jpg' in sample
 
         try:        # check that we can load the jpg with pil
@@ -20,3 +32,10 @@ def test_loads_tar():
 
             # Check the first few bytes to inspect the file signature (magic number)
             print(image_data[:10])  # This gives a hint about the file format
+
+        if i > 100:
+            dataset.stop = True
+
+    # assert test directory is empty
+
+    assert len(os.listdir(new_dir)) == 0

@@ -26,6 +26,7 @@ class StreamingDataset(IterableDataset):
         while not self.stop:
             tar_files = self._get_tar_files()
             if not tar_files:
+                print('waiting for tar files...')
                 time.sleep(5)
                 continue
 
@@ -34,4 +35,6 @@ class StreamingDataset(IterableDataset):
                 dataset = wds.WebDataset(tar_file)
                 for sample in dataset:
                     yield sample
+                
+                os.remove(tar_file)
 
