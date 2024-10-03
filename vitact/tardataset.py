@@ -9,6 +9,8 @@ import webdataset as wds
 class StreamingDataset(IterableDataset):
     def __init__(self, data_dir):
         self.data_dir = data_dir
+        self.stop = False
+        self.exclude = set()
 
     def _get_tar_files(self):
         """Retrieve the list of .ready.tar files in the data directory."""
@@ -21,7 +23,7 @@ class StreamingDataset(IterableDataset):
         if worker_info is not None:
             raise ValueError("This dataset is not compatible with multi-process loading.")
 
-        while True:
+        while not self.stop:
             tar_files = self._get_tar_files()
             if not tar_files:
                 time.sleep(5)

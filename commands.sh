@@ -29,6 +29,8 @@ aws autoscaling describe-auto-scaling-groups --query "AutoScalingGroups[?contain
 # if you run this immediately after creation it will still fail because the tasks can't be delted for some reason :(
 terraform apply -var="die_now=true" --auto-approve && terraform destroy -var="die_now=true" --auto-approve
 
-
+source ../scripts/load_secrets.sh && poetry run python add_to_queue.py --test
 
 for file in *.tar; do mv "$file" "${file%.tar}.ready.tar"; done
+
+

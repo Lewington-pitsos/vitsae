@@ -40,7 +40,7 @@ def push_to_sqs(urls, sqs_queue_url):
         except Exception as e:
             print(f"Error sending URL to SQS: {url}. Error: {str(e)}")
 
-    time.sleep(15)
+    time.sleep(20)
     response = sqs.get_queue_attributes(
         QueueUrl=sqs_queue_url,
         AttributeNames=['ApproximateNumberOfMessages']

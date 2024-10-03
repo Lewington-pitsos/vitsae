@@ -113,7 +113,6 @@ class TarMaker:
                 },
                 ReturnValues="UPDATED_NEW"
             )
-
         
             print(f'Upload counter incremented. Current count: {counter_response["Attributes"]["upload_count"]}')
 

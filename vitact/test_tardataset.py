@@ -6,14 +6,10 @@ import webdataset as wds
 def test_loads_tar():
     dataset = StreamingDataset('test/tars')
 
-    # dataset = wds.WebDataset('test/tars/00001-300-600.ready.tar')
-
     for sample in dataset:
         image_data = sample['jpg']
         print(sample.keys())
         assert 'jpg' in sample
-        # assert 'json' in sample
-        print('---')
 
         try:        # check that we can load the jpg with pil
             image = Image.open(io.BytesIO(image_data))

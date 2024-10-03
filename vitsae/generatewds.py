@@ -160,7 +160,7 @@ def process_parquet(
             return False  # Indicate that this image was not processed
 
         try:
-            async with session.get(image_url, timeout=14) as response:
+            async with session.get(image_url, timeout=7) as response:
                 if response.status == 200:
                     image_content = await response.read()
                     metadata = {
