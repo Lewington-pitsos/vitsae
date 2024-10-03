@@ -16,18 +16,18 @@ def non_extension_part(file_path):
     return os.path.splitext(os.path.basename(file_path))[0]
 
 def make_tarfile(watch_dir, prefix):
-    files_to_bundle = sorted([os.path.join(watch_dir, f)  for f in os.listdir(watch_dir) if f.startswith(prefix)])
+    all_files = sorted([os.path.join(watch_dir, f)  for f in os.listdir(watch_dir) if f.startswith(prefix)])
     tar_filename = os.path.join(watch_dir, f'{prefix}.tar')
 
     exclude = set()
-    for file_path in files_to_bundle:
+    for file_path in all_files:
         if file_path.split('.')[-1] == 'jpg':
             try:
                 _ = Image.open(file_path)
             except PIL.UnidentifiedImageError:
                 exclude.add(non_extension_part(file_path))
 
-    files_to_bundle = [f for f in files_to_bundle if non_extension_part(f) not in exclude]
+    files_to_bundle = [f for f in all_files if non_extension_part(f) not in exclude]
 
     if len(files_to_bundle) == 0:
         return None, []
@@ -36,7 +36,7 @@ def make_tarfile(watch_dir, prefix):
         for file_path in files_to_bundle:
             tar.add(file_path, arcname=file_path.split('/')[-1])
     
-    return tar_filename, files_to_bundle
+    return tar_filename, all_files
 
 
 class TarMaker:
@@ -124,7 +124,7 @@ class TarMaker:
     def bundle_and_upload_files(self, pq_id, batch_id):
         prefix = f'{pq_id}-{batch_id}'
 
-        tar_filename, bundled_files = make_tarfile(self.watch_dir, prefix)
+        tar_filename, all_files = make_tarfile(self.watch_dir, prefix)
         if not tar_filename:
             print(f'No valid files found for {prefix}. Skipping bundling and uploading.')
             return
@@ -136,7 +136,7 @@ class TarMaker:
 
             if os.path.exists(tar_filename):
                 os.remove(tar_filename)
-            for file_path in bundled_files:
+            for file_path in all_files:
                 if os.path.exists(file_path):
                     os.remove(file_path)
 
