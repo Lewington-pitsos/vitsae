@@ -287,7 +287,7 @@ def prevent_further_tasks(config):
 def generate_webdatasets(
     min_images_per_tar=15000,
     wait_after_last_change=600,
-    initial_wait_time = 500,
+    initial_wait_time = 1200,
     max_images_per_tar=30000,
     concurrency=800,
     s3_output_prefix='webdataset',

@@ -1,14 +1,43 @@
 import os
+import re
 import tarfile
 import boto3
 from collections import defaultdict
 import time
 
 from utils import load_config
+from PIL import Image
 import PIL
 
 
 from constants import COUNTER_BATCH_ID, COUNTER_PQ_ID
+
+def non_extension_part(file_path):
+    return os.path.splitext(os.path.basename(file_path))[0]
+
+def make_tarfile(watch_dir, prefix):
+    files_to_bundle = sorted([os.path.join(watch_dir, f)  for f in os.listdir(watch_dir) if f.startswith(prefix)])
+    tar_filename = os.path.join(watch_dir, f'{prefix}.tar')
+
+    exclude = set()
+    for file_path in files_to_bundle:
+        if file_path.split('.')[-1] == 'jpg':
+            try:
+                _ = Image.open(file_path)
+            except PIL.UnidentifiedImageError:
+                exclude.add(non_extension_part(file_path))
+
+    files_to_bundle = [f for f in files_to_bundle if non_extension_part(f) not in exclude]
+
+    if len(files_to_bundle) == 0:
+        return None, []
+
+    with tarfile.open(tar_filename, 'w') as tar:
+        for file_path in files_to_bundle:
+            tar.add(file_path, arcname=file_path.split('/')[-1])
+    
+    return tar_filename, files_to_bundle
+
 
 class TarMaker:
     def __init__(self, 
@@ -91,24 +120,15 @@ class TarMaker:
         except Exception as e:
             print(f'Failed to mark {pq_id}, {batch_id} as uploaded: {e}')
 
+
     def bundle_and_upload_files(self, pq_id, batch_id):
         prefix = f'{pq_id}-{batch_id}'
 
-        files_to_bundle = sorted([f for f in os.listdir(self.watch_dir) if f.startswith(prefix)])
-        tar_filename = os.path.join(self.watch_dir, f'{prefix}.tar')
+        tar_filename, bundled_files = make_tarfile(self.watch_dir, prefix)
+        if not tar_filename:
+            print(f'No valid files found for {prefix}. Skipping bundling and uploading.')
+            return
 
-        with tarfile.open(tar_filename, 'w') as tar:
-            for file_name in files_to_bundle:
-                file_path = os.path.join(self.watch_dir, file_name)
-                
-                try:
-                    with PIL.Image.open(file_path) as img:
-                        pass
-                    tar.add(file_path, arcname=file_name)
-                except PIL.UnidentifiedImageError:
-                    continue
-
-        
         s3_path = self.upload_to_s3(tar_filename, prefix)
         if s3_path:
             self.mark_as_uploaded(pq_id, batch_id)
@@ -116,10 +136,9 @@ class TarMaker:
 
             if os.path.exists(tar_filename):
                 os.remove(tar_filename)
-            for file_name in files_to_bundle:
-                local_file_path = os.path.join(self.watch_dir, file_name)
-                if os.path.exists(local_file_path):
-                    os.remove(local_file_path)
+            for file_path in bundled_files:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
 
             self.previous_file_counts[prefix] = 0
 

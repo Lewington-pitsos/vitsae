@@ -21,3 +21,14 @@ docker run -e HF_TOKEN=$HF_TOKEN -e AWS_ACCESS_KEY=$AWS_ACCESS_KEY -e AWS_SECRET
 docker build -t file-ecr-localtest . && docker run -e HF_TOKEN=$HF_TOKEN -e AWS_ACCESS_KEY=$AWS_ACCESS_KEY -e AWS_SECRET=$AWS_SECRET -e SQS_QUEUE_URL=$SQS_QUEUE_URL -e S3_BUCKET_NAME=$S3_BUCKET_NAME -e TABLE_NAME=$TABLE_NAME -e ECS_CLUSTER_NAME=$ECS_CLUSTER_NAME -e ECS_SERVICE_NAME=$ECS_SERVICE_NAME file-ecr-localtest
 
 aws autoscaling describe-auto-scaling-groups --query "AutoScalingGroups[?contains(AutoScalingGroupName, 'ecs-autoscaling-group')]"
+
+
+
+# die_now stops the capacity provider being in charge of desired instances in the autoscaling group, which makes the desired capacity deafult to 0
+# this will cause all the instances to be terminated, which means the subsiquent destroy will now succeed.
+# if you run this immediately after creation it will still fail because the tasks can't be delted for some reason :(
+terraform apply -var="die_now=true" --auto-approve && terraform destroy -var="die_now=true" --auto-approve
+
+
+
+for file in *.tar; do mv "$file" "${file%.tar}.ready.tar"; done
