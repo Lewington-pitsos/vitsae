@@ -32,7 +32,7 @@ class StreamingDataset(IterableDataset):
 
             # Create a WebDataset pipeline for each tar file
             for tar_file in tar_files:
-                dataset = wds.WebDataset(tar_file)
+                dataset = wds.WebDataset(tar_file, shardshuffle=False)
                 for sample in dataset:
                     yield sample
                 
