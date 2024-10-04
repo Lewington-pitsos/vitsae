@@ -1,6 +1,4 @@
-import chunk
-import os
-from generatewds import iterate_parquet_rows  # Adjust the import according to your project structure
+from generatewds import iterate_parquet_rows
 
 def test_iterate_parquet_rows():
     file_path = "test/parquet/sample.parquet"
@@ -21,6 +19,7 @@ def test_iterate_parquet_rows():
 
     assert count_rows > 0, "The number of rows should be greater than 0"
 
-    assert count_rows == 9719, "The number of rows should be equal to 505912"
+    n = 9719
+    assert count_rows == n, f"The number of rows should be equal to {n}"
 
 
