@@ -592,14 +592,20 @@ resource "aws_ecs_service" "tar_service" {
   }
 
   deployment_maximum_percent         = 200
-  deployment_minimum_healthy_percent = 70
+  deployment_minimum_healthy_percent = 85
 
   tags = {
     Environment = var.environment
   }
 
   depends_on = [
-    aws_cloudwatch_log_group.ecs_log_group
+    aws_cloudwatch_log_group.ecs_log_group,
+    aws_iam_role.ecs_instance_role,
+    aws_iam_role.ecs_interface_role,
+    aws_iam_role_policy_attachment.ecs_instance_role_policy_attachment,
+    aws_iam_role_policy_attachment.ecs_interface_role_policy_attachment,
+    aws_iam_instance_profile.ecs_instance_profile,
+    aws_iam_policy.ecs_task_policy,
   ]
 }
 

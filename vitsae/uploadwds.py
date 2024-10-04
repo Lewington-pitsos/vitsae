@@ -1,5 +1,4 @@
 import os
-import re
 import tarfile
 import boto3
 from collections import defaultdict
@@ -54,7 +53,7 @@ class TarMaker:
         self.file_counts = defaultdict(int)
         self.previous_file_counts = {}
         self.watch_dir = watch_dir
-        self.upload_threshold = min_images_per_tar
+        self.min_images_per_tar = min_images_per_tar
         self.s3_client = s3_client
         self.s3_bucket = s3_bucket_name
         self.s3_prefix = s3_prefix
@@ -80,7 +79,7 @@ class TarMaker:
         for prefix, count in self.file_counts.items():
             if count == self.previous_file_counts.get(prefix, 0):
                 if prefix in self.seconds_since_change:
-                    if count > self.upload_threshold and time.time() - self.seconds_since_change.get(prefix, 0) > self.wait_after_last_change:
+                    if count > self.min_images_per_tar and time.time() - self.seconds_since_change.get(prefix, 0) > self.wait_after_last_change:
                         pq_id, batch_id = self._get_ids_from_file(prefix)
                         self.bundle_and_upload_files(pq_id, batch_id)
                 else:
@@ -171,7 +170,7 @@ class TarMaker:
 
             self.update_file_counts()
             for prefix, count in self.file_counts.items():
-                if count > self.upload_threshold:
+                if count > self.min_images_per_tar:
                     pq_id, batch_id = self._get_ids_from_file(prefix)
                     self.bundle_and_upload_files(pq_id, batch_id)
 

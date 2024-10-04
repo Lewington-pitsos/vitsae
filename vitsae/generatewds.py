@@ -160,7 +160,7 @@ def process_parquet(
             return False  # Indicate that this image was not processed
 
         try:
-            async with session.get(image_url, timeout=7) as response:
+            async with session.get(image_url, timeout=10) as response:
                 if response.status == 200:
                     image_content = await response.read()
                     metadata = {
@@ -285,10 +285,10 @@ def prevent_further_tasks(config):
         print(f"Failed to set desired task count: {e}")
 
 def generate_webdatasets(
-    min_images_per_tar=15000,
+    min_images_per_tar=15_000,
     wait_after_last_change=600,
     initial_wait_time = 1200,
-    max_images_per_tar=30000,
+    max_images_per_tar=45_000,
     concurrency=800,
     s3_output_prefix='webdataset',
     total_images_required=50_000_000,
