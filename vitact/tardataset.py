@@ -1,4 +1,3 @@
-from dol.base import Val
 import torch
 from torch.utils.data import IterableDataset
 import os

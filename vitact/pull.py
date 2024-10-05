@@ -31,7 +31,6 @@ def get_local_tar_count(local_dir):
     return len([f for f in os.listdir(local_dir) if f.endswith('.tar')])
 
 def download_from_s3(local_dir, bucket_name, key):
-    """Downloads a file from S3 and deletes it from the bucket."""
     local_filename = os.path.join(local_dir, os.path.basename(key))
     s3.download_file(bucket_name, key, local_filename)
     logging.info(f'Downloaded {key} to {local_filename}')
