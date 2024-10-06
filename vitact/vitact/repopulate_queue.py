@@ -1,5 +1,4 @@
 import boto3
-import os
 import logging
 import sys
 from botocore.exceptions import ClientError

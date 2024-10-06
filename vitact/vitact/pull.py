@@ -6,22 +6,19 @@ import logging
 from utils import load_config
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-config = load_config()
 
-s3 = boto3.client('s3')
-sqs = boto3.client('sqs')
 
 def get_local_tar_count(local_dir):
     """Counts the number of .tar files in the local directory."""
     return len([f for f in os.listdir(local_dir) if f.endswith('.tar')])
 
-def download_from_s3(local_dir, bucket_name, key):
+def download_from_s3(s3, local_dir, bucket_name, key):
     local_filename = os.path.join(local_dir, os.path.basename(key))
     s3.download_file(bucket_name, key, local_filename)
     logging.info(f'Downloaded {key} to {local_filename}')
     os.rename(local_filename, local_filename.replace('.tar', '.ready.tar'))
 
-def get_next_s3_key_from_sqs(queue_url):
+def get_next_s3_key_from_sqs(sqs, queue_url):
     """Fetches the next S3 key from the SQS queue."""
     try:
         response = sqs.receive_message(
@@ -45,7 +42,7 @@ def get_next_s3_key_from_sqs(queue_url):
         logging.error(f'Error fetching S3 key from SQS: {e}')
         return None, None
 
-def delete_message_from_sqs(queue_url, receipt_handle):
+def delete_message_from_sqs(sqs, queue_url, receipt_handle):
     """Deletes a message from the SQS queue."""
     try:
         sqs.delete_message(
@@ -60,6 +57,8 @@ def keep_pulling(local_dir, stop_event=None):
     config = load_config()
     bucket_name = config['S3_BUCKET_NAME']
     queue_url = config['SQS_TAR_QUEUE_URL']
+    sqs = boto3.client('sqs', aws_access_key_id=config['AWS_ACCESS_KEY'], aws_secret_access_key=config['AWS_SECRET'], region_name='us-east-1')
+    s3 = boto3.client('s3', aws_access_key_id=config['AWS_ACCESS_KEY'], aws_secret_access_key=config['AWS_SECRET'])
 
     # Ensure the local directory exists
     if not os.path.exists(local_dir):
@@ -75,7 +74,7 @@ def keep_pulling(local_dir, stop_event=None):
             continue
 
         # Get the next S3 key from the SQS queue
-        s3_key, receipt_handle = get_next_s3_key_from_sqs(queue_url)
+        s3_key, receipt_handle = get_next_s3_key_from_sqs(sqs, queue_url)
         if not s3_key:
             logging.info('No .tar files found in SQS queue.')
             time.sleep(20)
@@ -86,10 +85,10 @@ def keep_pulling(local_dir, stop_event=None):
 
             if 'Contents' not in response:
                 logging.error(f'Error processing {s3_key}: File not found on S3')
-                delete_message_from_sqs(queue_url, receipt_handle)
+                delete_message_from_sqs(sqs, queue_url, receipt_handle)
             else:
-                download_from_s3(local_dir, bucket_name, s3_key)
-                delete_message_from_sqs(queue_url, receipt_handle)
+                download_from_s3(s3, local_dir, bucket_name, s3_key)
+                delete_message_from_sqs(sqs, queue_url, receipt_handle)
         except Exception as e:
             logging.error(f'Error processing {s3_key}: {e}')
             continue
