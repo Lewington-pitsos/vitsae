@@ -13,7 +13,6 @@ from pull import keep_pulling
 from threading import Thread, Event
 
 def main(
-        bucket_name,
         run_name=None, 
         n_samples=None,
         transformer_name='laion/CLIP-ViT-L-14-laion2B-s32B-b82K', # 24 layers in total
@@ -56,12 +55,12 @@ def main(
         hook_locations = hook_locations[:n_hooks]
 
     print('number of hooks:', len(hook_locations))
-    creds = load_config()
-    creds['AWS_ACCESS_KEY_ID'] = creds['AWS_ACCESS_KEY']
+    config = load_config()
+    config['AWS_ACCESS_KEY_ID'] = config['AWS_ACCESS_KEY']
     
     try:
         vit_generate(
-            creds,
+            config,
             run_name,
             batches_per_cache=batches_per_cache,
             dataset=dataset, 
@@ -72,7 +71,7 @@ def main(
             cache_type='s3_multilayer',
             n_samples=n_samples,
             log_every=None if log_every < 1 else log_every,
-            bucket_name=bucket_name,
+            bucket_name=config['S3_ACTIVATIONS_BUCKET_NAME'],
             full_sequence=full_sequence,
             input_tensor_shape=(batch_size, *input_tensor_shape) if input_tensor_shape else None,
             num_cache_workers=num_cache_workers,

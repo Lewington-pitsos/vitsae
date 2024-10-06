@@ -9,6 +9,7 @@ def load_config():
         'SQS_QUEUE_URL',
         'SQS_TAR_QUEUE_URL',
         'S3_BUCKET_NAME',
+        'S3_ACTIVATIONS_BUCKET_NAME',
         'TABLE_NAME',
         'ECS_CLUSTER_NAME',
         'ECS_SERVICE_NAME',

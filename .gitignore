@@ -47,3 +47,5 @@ cruft
 
 **/pad.py
 log
+vitact/vitact/test/tars-tmp*
+vitact/vitact/test/test

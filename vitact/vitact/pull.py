@@ -70,7 +70,7 @@ def keep_pulling(local_dir, stop_event=None):
         local_tar_count = get_local_tar_count(local_dir)
         logging.info(f'Number of local .tar files: {local_tar_count}')
 
-        if local_tar_count >= 3:
+        if local_tar_count >= 9:
             time.sleep(3)  # Wait before checking again
             continue
 
