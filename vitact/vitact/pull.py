@@ -3,22 +3,7 @@ import os
 import time
 import logging
 
-def load_config():
-    hf_token = os.getenv('HF_TOKEN')
-    aws_access_key = os.getenv('AWS_ACCESS_KEY')
-    aws_secret = os.getenv('AWS_SECRET')
-    sqs_queue_url = os.getenv('SQS_QUEUE_URL')
-    s3_bucket_name = os.getenv('S3_BUCKET_NAME')
-    table_name = os.getenv('TABLE_NAME')
-
-    return {
-        'HF_TOKEN': hf_token,
-        'AWS_ACCESS_KEY': aws_access_key,
-        'AWS_SECRET': aws_secret,
-        'SQS_QUEUE_URL': sqs_queue_url,
-        'S3_BUCKET_NAME': s3_bucket_name,
-        'TABLE_NAME': table_name
-    }
+from utils import load_config
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 config = load_config()
@@ -71,23 +56,21 @@ def delete_message_from_sqs(queue_url, receipt_handle):
     except Exception as e:
         logging.error(f'Error deleting message from SQS: {e}')
 
-def main():
+def keep_pulling(local_dir, stop_event=None):
     config = load_config()
-    local_dir = 'data'
     bucket_name = config['S3_BUCKET_NAME']
-    queue_url = config['SQS_QUEUE_URL']
+    queue_url = config['SQS_TAR_QUEUE_URL']
 
     # Ensure the local directory exists
     if not os.path.exists(local_dir):
         os.makedirs(local_dir)
         logging.info(f'Created local directory {local_dir}')
 
-    while True:
+    while stop_event is None or not stop_event.is_set():
         local_tar_count = get_local_tar_count(local_dir)
         logging.info(f'Number of local .tar files: {local_tar_count}')
 
         if local_tar_count >= 3:
-            logging.info('Local .tar files count >= 3, waiting...')
             time.sleep(3)  # Wait before checking again
             continue
 
@@ -98,16 +81,18 @@ def main():
             time.sleep(20)
             continue
 
-        # Download the file and delete the message from SQS
         try:
-            download_from_s3(local_dir, bucket_name, s3_key)
-            delete_message_from_sqs(queue_url, receipt_handle)
+            response = s3.list_objects_v2(Bucket=bucket_name, Prefix=s3_key)
+
+            if 'Contents' not in response:
+                logging.error(f'Error processing {s3_key}: File not found on S3')
+                delete_message_from_sqs(queue_url, receipt_handle)
+            else:
+                download_from_s3(local_dir, bucket_name, s3_key)
+                delete_message_from_sqs(queue_url, receipt_handle)
         except Exception as e:
             logging.error(f'Error processing {s3_key}: {e}')
             continue
 
-        # Sleep before the next iteration
-        time.sleep(5)
-
 if __name__ == '__main__':
-    main()
+    keep_pulling(local_dir='cruft/tars')

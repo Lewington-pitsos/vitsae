@@ -1,7 +1,9 @@
+from numpy import isin
 from torch.utils import data
-from tardataset import StreamingDataset
+from tardataset import StreamingDataset, StreamingTensorDataset
 from PIL import Image
 import io
+import torch
 import webdataset as wds
 import os
 
@@ -17,7 +19,7 @@ def test_loads_tar():
         new_tar_file_path = os.path.join(new_dir, tar_file)
         os.system(f'cp {tar_file_path} {new_tar_file_path}')
 
-    dataset = StreamingDataset(new_dir)
+    dataset = StreamingDataset(new_dir, destructive=False)
 
     for i, sample in enumerate(dataset):
         image_data = sample['jpg']
@@ -38,4 +40,22 @@ def test_loads_tar():
 
     # assert test directory is empty
 
-    assert len(os.listdir(new_dir)) == 0
+    assert len(os.listdir(new_dir)) > 0
+
+    dataset = StreamingTensorDataset(new_dir, destructive=False)
+
+    for i, sample in enumerate(dataset):
+        assert isinstance(sample, torch.Tensor)
+
+        if i > 100:
+            print('stopping')   
+            dataset.stop = True
+
+    assert len(os.listdir(new_dir)) > 0
+
+    # delete all files then remove directory
+    for tar_file in os.listdir(new_dir):
+        os.remove(os.path.join(new_dir, tar_file))
+    os.rmdir(new_dir)
+
+
