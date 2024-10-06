@@ -3,7 +3,7 @@ from vitact.generate import generate_activations
 if __name__ == '__main__':
     generate_activations(
         run_name="CLIP-ViT-L-14",
-        n_samples=6_250_000,
+        n_samples=6_500_000,
         batch_size=1024,
         batches_per_cache=11,
         full_sequence=True,
