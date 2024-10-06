@@ -106,11 +106,11 @@ resource "aws_route_table_association" "private_rt_assoc" {
 # 1. S3 Bucket for Model Outputs
 #######################################
 
-resource "aws_s3_bucket" "model_outputs" {
+resource "aws_s3_bucket" "tarfiles" {
   bucket = var.bucket_name
 
   tags = {
-    Name        = "Model Outputs Bucket"
+    Name        = "Tar Files Bucket"
     Environment = var.environment
   }
 
@@ -215,8 +215,8 @@ resource "aws_iam_policy" "ecs_task_policy" {
         Action   = ["s3:GetObject", "s3:PutObject"]
         Effect   = "Allow"
         Resource = [
-          aws_s3_bucket.model_outputs.arn,
-          "${aws_s3_bucket.model_outputs.arn}/*"
+          aws_s3_bucket.tarfiles.arn,
+          "${aws_s3_bucket.tarfiles.arn}/*"
         ]
       },
       {
@@ -268,7 +268,7 @@ resource "aws_iam_policy" "ecs_task_policy" {
           aws_ssm_parameter.aws_secret.arn,
           aws_ssm_parameter.parquet_file_queue_url.arn,
           aws_ssm_parameter.tar_file_queue_url.arn,
-          aws_ssm_parameter.model_outputs_bucket_name.arn,
+          aws_ssm_parameter.tarfiles_bucket_name.arn,
           aws_ssm_parameter.table_name.arn,
           aws_ssm_parameter.ecs_cluster_name.arn,       # Add this line
           aws_ssm_parameter.ecs_service_name.arn        # Add this line
@@ -530,7 +530,7 @@ resource "aws_ecs_task_definition" "tar_create_task" {
         },
         {
           name      = "S3_BUCKET_NAME"
-          valueFrom = aws_ssm_parameter.model_outputs_bucket_name.arn
+          valueFrom = aws_ssm_parameter.tarfiles_bucket_name.arn
         },
         {
           name      = "TABLE_NAME"
@@ -697,11 +697,11 @@ resource "aws_ssm_parameter" "tar_file_queue_url" {
   }
 }
 
-resource "aws_ssm_parameter" "model_outputs_bucket_name" {
+resource "aws_ssm_parameter" "tarfiles_bucket_name" {
   name        = "${var.environment}-s3-bucket-name"
   description = "S3_BUCKET_NAME for ECS tasks"
   type        = "String"
-  value       = aws_s3_bucket.model_outputs.bucket
+  value       = aws_s3_bucket.tarfiles.bucket
 
   tags = {
     Environment = var.environment

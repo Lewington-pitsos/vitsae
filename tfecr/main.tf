@@ -12,3 +12,13 @@ resource "aws_ecr_repository" "file_ecr" {
   }
 }
 
+resource "aws_s3_bucket" "activations" {
+  bucket = "sae-activations"
+
+  tags = {
+    Name        = "Activations Bucket"
+    Environment = "production"
+  }
+
+  force_destroy = true
+}
