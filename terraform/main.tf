@@ -106,7 +106,7 @@ resource "aws_route_table_association" "private_rt_assoc" {
 # 1. S3 Bucket for Model Outputs
 #######################################
 
-resource "aws_s3_bucket" "tarfiles" {
+resource "aws_s3_bucket" "model_outputs" {
   bucket = var.bucket_name
 
   tags = {
@@ -215,8 +215,8 @@ resource "aws_iam_policy" "ecs_task_policy" {
         Action   = ["s3:GetObject", "s3:PutObject"]
         Effect   = "Allow"
         Resource = [
-          aws_s3_bucket.tarfiles.arn,
-          "${aws_s3_bucket.tarfiles.arn}/*"
+          aws_s3_bucket.model_outputs.arn,
+          "${aws_s3_bucket.model_outputs.arn}/*"
         ]
       },
       {
@@ -269,6 +269,7 @@ resource "aws_iam_policy" "ecs_task_policy" {
           aws_ssm_parameter.parquet_file_queue_url.arn,
           aws_ssm_parameter.tar_file_queue_url.arn,
           aws_ssm_parameter.tarfiles_bucket_name.arn,
+          aws_ssm_parameter.activations_bucket_name.arn,
           aws_ssm_parameter.table_name.arn,
           aws_ssm_parameter.ecs_cluster_name.arn,       # Add this line
           aws_ssm_parameter.ecs_service_name.arn        # Add this line
@@ -533,6 +534,10 @@ resource "aws_ecs_task_definition" "tar_create_task" {
           valueFrom = aws_ssm_parameter.tarfiles_bucket_name.arn
         },
         {
+          name      = "S3_ACTIVATIONS_BUCKET_NAME"
+          valueFrom = aws_ssm_parameter.activations_bucket_name.arn
+        },
+        {
           name      = "TABLE_NAME"
           valueFrom = aws_ssm_parameter.table_name.arn
         },
@@ -701,11 +706,23 @@ resource "aws_ssm_parameter" "tarfiles_bucket_name" {
   name        = "${var.environment}-s3-bucket-name"
   description = "S3_BUCKET_NAME for ECS tasks"
   type        = "String"
-  value       = aws_s3_bucket.tarfiles.bucket
+  value       = aws_s3_bucket.model_outputs.bucket
 
   tags = {
     Environment = var.environment
     Name        = "S3_BUCKET_NAME Parameter"
+  }
+}
+
+resource "aws_ssm_parameter" "activations_bucket_name" {
+  name        = "${var.environment}-s3-activation-bucket-name"
+  description = "S3_BUCKET_NAME for storing output activations"
+  type        = "String"
+  value       = "sae-activations"
+
+  tags = {
+    Environment = var.environment
+    Name        = "S3_ACTIVATIONS_BUCKET_NAME Parameter"
   }
 }
 
