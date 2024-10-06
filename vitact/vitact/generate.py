@@ -7,12 +7,12 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import randomname
-from tardataset import StreamingDataset, StreamingTensorDataset
+from tardataset import StreamingTensorDataset
 from utils import load_config
 from pull import keep_pulling
 from threading import Thread, Event
 
-def main(
+def generate_activations(
         run_name=None, 
         n_samples=None,
         transformer_name='laion/CLIP-ViT-L-14-laion2B-s32B-b82K', # 24 layers in total
@@ -31,8 +31,8 @@ def main(
 
     tar_dir = 'cruft/tars'
     stop_event = Event()
-    t = Thread(target=keep_pulling, args=(tar_dir, stop_event))
-    t.start()
+    pull_thread = Thread(target=keep_pulling, args=(tar_dir, stop_event))
+    pull_thread.start()
 
     if run_name is None:
         run_name = randomname.generate('adj/', 'n/')
@@ -78,13 +78,18 @@ def main(
             num_data_workers=num_data_workers
         )
     except Exception as e:
+        dataset.stop()
         stop_event.set()
-        t.join()
+        pull_thread.join()
         raise e
+
+    dataset.stop()
+    stop_event.set()
+    pull_thread.join()
     
 
 if __name__ == '__main__':
-    fire.Fire(main)
+    fire.Fire(generate_activations)
     
 # 641.3362 MB/s @ 8 processes
 # 471.1610 MB/s @ 6 processes

@@ -14,7 +14,7 @@ import torchvision.transforms as transforms
 class StreamingDataset(IterableDataset):
     def __init__(self, data_dir):
         self.data_dir = data_dir
-        self.stop = False
+        self._stop = False
         self.exclude = set()
 
     def _get_tar_files(self):
@@ -23,8 +23,10 @@ class StreamingDataset(IterableDataset):
         tar_files.sort()
         return tar_files
 
+    def stop(self):
+        self._stop = True
+
     def _hash_file_path(self, tar_path):
-        # Use MD5 hash for consistency across different Python runs
         hash_digest = hashlib.md5(tar_path.encode('utf-8')).hexdigest()
         return int(hash_digest, 16)
 
@@ -38,14 +40,13 @@ class StreamingDataset(IterableDataset):
             worker_id = worker_info.id
             num_workers = worker_info.num_workers
 
-        while not self.stop:
+        while not self._stop:
             tar_files = self._get_tar_files()
             if not tar_files:
                 print('Waiting for tar files...')
                 time.sleep(5)
                 continue
 
-            # Filter tar files based on the worker ID using a deterministic hash
             assigned_tar_files = [
                 tar for tar in tar_files
                 if self._hash_file_path(tar) % num_workers == worker_id
@@ -82,15 +83,14 @@ class StreamingDataset(IterableDataset):
             time.sleep(0.3)
 
 class StreamingTensorDataset(StreamingDataset):
-    def __init__(self, data_dir, device='cuda'):
+    def __init__(self, data_dir):
         super().__init__(data_dir)
 
         self.transform = transforms.ToTensor()
-        self.device = device
 
     def __iter__(self):
         for sample in super().__iter__():
-            if self.stop:
+            if self._stop:
                 break
 
             if 'jpg' in sample:
@@ -98,7 +98,7 @@ class StreamingTensorDataset(StreamingDataset):
                     image = Image.open(io.BytesIO(sample['jpg'])).convert('RGB')
                     image = image.resize((224, 224))
 
-                    image_tensor = self.transform(image).to(self.device)
+                    image_tensor = self.transform(image)
                     yield image_tensor
                 except Exception as e:
                     print(type(e), e)

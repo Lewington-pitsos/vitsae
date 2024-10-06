@@ -68,7 +68,7 @@ def keep_pulling(local_dir, stop_event=None):
 
     while stop_event is None or not stop_event.is_set():
         local_tar_count = get_local_tar_count(local_dir)
-        logging.info(f'Number of local .tar files: {local_tar_count}')
+        logging.debug(f'Number of local .tar files: {local_tar_count}')
 
         if local_tar_count >= 9:
             time.sleep(3)  # Wait before checking again

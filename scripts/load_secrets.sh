@@ -5,7 +5,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     exit 1
 fi
 
-echo "Existing Environment Variables:"
+echo "Existing Environment Variables: ---------------------------------------"
 echo "HF_TOKEN: $HF_TOKEN"
 echo "AWS_ACCESS_KEY: $AWS_ACCESS_KEY"
 echo "AWS_SECRET: $AWS_SECRET"
@@ -30,7 +30,7 @@ export TABLE_NAME=$(aws ssm get-parameter --name production-table-name --region 
 export ECS_CLUSTER_NAME=$(aws ssm get-parameter --name production-ecs-cluster-name --region us-east-1 --query 'Parameter.Value' --output text)
 export ECS_SERVICE_NAME=$(aws ssm get-parameter --name production-ecs-service-name --region us-east-1 --query 'Parameter.Value' --output text)
 
-echo "Retrieved Environment Variables:"
+echo "Retrieved Environment Variables: ---------------------------------------"
 echo "HF_TOKEN: $HF_TOKEN"
 echo "AWS_ACCESS_KEY: $AWS_ACCESS_KEY"
 echo "AWS_SECRET: $AWS_SECRET"

@@ -167,7 +167,7 @@ def test_loads_tar(temporary_tar_dir):
                         f"Image data snippet: {image_data[:10]}")
 
         if i >= 100:
-            dataset.stop = True
+            dataset._stop = True
             break
 
     # Assert that the temporary directory is empty after processing
@@ -189,7 +189,7 @@ def test_loads_tar_tensors(temporary_tar_dir_tensors):
 
         if i >= 100:
             print('Stopping dataset iteration after 100 samples.')
-            dataset.stop = True
+            dataset._stop = True
             break
 
     # Assert that the temporary directory has exactly one tar file left
@@ -243,7 +243,7 @@ def test_multi_worker_loads_tar(multi_worker_tar_dir):
                 sample_count += 1
 
                 if sample_count >= total_samples:
-                    dataset.stop = True
+                    dataset._stop = True
                     break
 
             if sample_count >= total_samples:
