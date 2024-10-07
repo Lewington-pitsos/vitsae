@@ -7,7 +7,6 @@ ENV PYTHONUNBUFFERED=1
 
 # Install build dependencies
 ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=Etc/UTC
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     build-essential \
@@ -33,16 +32,17 @@ WORKDIR /vitact
 COPY pyproject.toml poetry.lock* /vitact/
 
 # Install dependencies without dev packages
+RUN poetry config installer.max-workers 10
 RUN poetry install --no-root --no-interaction --no-ansi --no-dev
 
 # Copy the rest of the application code
 COPY . /vitact
 
-# Stage 2: Production Image
+# # Stage 2: Production Image
 FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu20.04
-# FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+# # FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 
-# Set environment variables
+# # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
@@ -56,10 +56,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Python 3.11 pip
 RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
 
-# Copy the installed dependencies from the builder stage
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-
-# Copy the application code from the builder stage
+COPY --from=builder /usr/local/lib/python3.11/dist-packages /usr/local/lib/python3.11/dist-packages
 COPY --from=builder /vitact /vitact
 
 # Set the working directory
@@ -67,4 +64,4 @@ WORKDIR /vitact
 RUN chmod +x entrypoint.sh
 
 # Define the default command
-ENTRYPOINT [ "entrypoint.sh" ]
+CMD [ "./entrypoint.sh" ]
