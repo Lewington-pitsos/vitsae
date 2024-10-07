@@ -883,7 +883,7 @@ resource "aws_ecs_service" "activations_service" {
   name            = "activations-service"
   cluster         = aws_ecs_cluster.activation_cluster.id
   task_definition = aws_ecs_task_definition.activations_service_task.arn
-  desired_count   = 0
+  desired_count   = var.stop_activations ? 0 : 4
 
   capacity_provider_strategy {
     capacity_provider = aws_ecs_capacity_provider.activations_capacity_provider.name
@@ -919,9 +919,8 @@ resource "aws_launch_template" "activations_launch_template" {
   name_prefix   = "activations-launch-template"
   image_id      = "ami-0757fc38223742869"
   # https://aws.amazon.com/releasenotes/aws-deep-learning-base-ami-amazon-linux-2/
-  # CuDNN version 12.1 if based off of the DLAMI
-  # Nvidia driver version 
-
+  # CUDA version 12.4
+  # Nvidia driver version  550.90.12 
 
   instance_type = "g6e.xlarge"  
   iam_instance_profile {
@@ -987,7 +986,7 @@ resource "aws_autoscaling_group" "activations_autoscaling_group" {
   name             = "activations-autoscaling-group"
   max_size         = 4          # Set as appropriate
   min_size         = 0                     # Allow scaling down to zero
-  desired_capacity = 0
+  desired_capacity = var.stop_activations ? 0 : 4
   protect_from_scale_in = false
 
 

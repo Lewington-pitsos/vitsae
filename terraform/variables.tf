@@ -151,3 +151,9 @@ variable "activations_ecr_arn" {
   description = "ARN of the activations repository"
   type        = string
 }
+
+variable "stop_activations" {
+  description = "Stop the activations service"
+  type        = bool
+  default     = false
+}
