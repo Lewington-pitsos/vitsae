@@ -7,11 +7,11 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-sache = {git = "https://github.com/lewington-pitsos/sache.git", branch = "main"}
-webdataset = "^0.2.100"
-pytest = "8.3.1"
+sache = {git = "https://github.com/lewington-pitsos/sache.git", rev = "24da64a5291e18871c858930fac2b27c793eb2f0" }
 pillow = "^10.4.0"
 
+[tool.poetry.group.dev.dependencies]
+pytest = "8.3.1"
 
 [build-system]
 requires = ["poetry-core"]

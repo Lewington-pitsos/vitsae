@@ -147,10 +147,6 @@ resource "aws_sqs_queue" "tar_file_queue" {
   }
 }
 
-#######################################
-# 5. ECS Cluster with G6 Spot Instances
-#######################################
-
 # ECS Cluster
 resource "aws_ecs_cluster" "activation_cluster" {
   name = var.cluster_name
@@ -165,7 +161,10 @@ resource "aws_ecs_cluster" "activation_cluster" {
 resource "aws_ecs_cluster_capacity_providers" "activation_cluster_capacity_providers" {
   cluster_name = aws_ecs_cluster.activation_cluster.name
 
-  capacity_providers = [aws_ecs_capacity_provider.ecs_capacity_provider.name]
+  capacity_providers = [
+    aws_ecs_capacity_provider.ecs_capacity_provider.name,
+    aws_ecs_capacity_provider.activations_capacity_provider.name
+  ]
 
   default_capacity_provider_strategy {
     capacity_provider = aws_ecs_capacity_provider.ecs_capacity_provider.name
@@ -237,6 +236,15 @@ resource "aws_iam_policy" "ecs_task_policy" {
         ]
         Effect   = "Allow"
         Resource = var.file_ecr_arn
+      },
+      {
+        Action   = [
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:BatchCheckLayerAvailability"
+        ]
+        Effect   = "Allow"
+        Resource = var.activations_ecr_arn
       },
       {
         Action   = "ecr:GetAuthorizationToken"
@@ -374,6 +382,10 @@ resource "aws_launch_template" "ecs_launch_template" {
     name = aws_iam_instance_profile.ecs_instance_profile.name
   }
 
+  instance_market_options {
+    market_type = "spot"
+  }
+
   network_interfaces {
     associate_public_ip_address = true
     delete_on_termination       = true
@@ -471,6 +483,7 @@ resource "aws_autoscaling_group" "ecs_autoscaling_group" {
   }
 
 }
+
 
 resource "aws_ecs_capacity_provider" "ecs_capacity_provider" {
   name = "${var.environment}-capacity-provider"
@@ -760,4 +773,255 @@ resource "aws_ssm_parameter" "ecs_service_name" {
     Environment = var.environment
     Name        = "ECS_SERVICE_NAME Parameter"
   }
+}
+
+
+
+
+
+
+
+
+
+
+# ------------------------- ACTIVATION GENERATION ---------------------------
+
+
+resource "aws_ecs_task_definition" "activations_service_task" {
+  family                   = "activations-service"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["EC2"]
+  execution_role_arn       = aws_iam_role.ecs_interface_role.arn
+  task_role_arn            = aws_iam_role.ecs_interface_role.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "activations-container"
+      image     = "${var.activations_ecr_url}:latest"
+      essential = true
+      memory    = 31500  # Adjust as needed
+      cpu       = 4096  # Adjust as needed
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = "/ecs/activations-service"
+          awslogs-region        = var.region
+          awslogs-stream-prefix = "ecs"
+        }
+      },
+      secrets = [
+        {
+          name      = "HF_TOKEN"
+          valueFrom = aws_ssm_parameter.hf_token.arn
+        },
+        {
+          name      = "AWS_ACCESS_KEY"
+          valueFrom = aws_ssm_parameter.aws_access_key.arn
+        },
+        {
+          name      = "AWS_SECRET"
+          valueFrom = aws_ssm_parameter.aws_secret.arn
+        },
+        {
+          name      = "SQS_QUEUE_URL"
+          valueFrom = aws_ssm_parameter.parquet_file_queue_url.arn
+        },
+        {
+          name      = "SQS_TAR_QUEUE_URL"
+          valueFrom = aws_ssm_parameter.tar_file_queue_url.arn
+        },
+        {
+          name      = "S3_BUCKET_NAME"
+          valueFrom = aws_ssm_parameter.tarfiles_bucket_name.arn
+        },
+        {
+          name      = "S3_ACTIVATIONS_BUCKET_NAME"
+          valueFrom = aws_ssm_parameter.activations_bucket_name.arn
+        },
+        {
+          name      = "TABLE_NAME"
+          valueFrom = aws_ssm_parameter.table_name.arn
+        },
+        {
+          name      = "ECS_CLUSTER_NAME"
+          valueFrom = aws_ssm_parameter.ecs_cluster_name.arn
+        },
+        {
+          name      = "ECS_SERVICE_NAME"
+          valueFrom = aws_ssm_parameter.ecs_service_name.arn
+        }
+      ],
+      resourceRequirements = [
+        {
+          type  = "GPU"
+          value = "1"  # Adjust the number of GPUs as needed
+        }
+      ]
+    }
+  ])
+
+  
+
+  tags = {
+    Name        = "ML Service Task Definition"
+    Environment = var.environment
+  }
+}
+
+
+resource "aws_cloudwatch_log_group" "activations_service_log_group" {
+  name              = "/ecs/activations-service"
+  retention_in_days = 7
+
+  tags = {
+    Environment = var.environment
+  }
+}
+
+
+resource "aws_ecs_service" "activations_service" {
+  name            = "activations-service"
+  cluster         = aws_ecs_cluster.activation_cluster.id
+  task_definition = aws_ecs_task_definition.activations_service_task.arn
+  desired_count   = 0
+
+  capacity_provider_strategy {
+    capacity_provider = aws_ecs_capacity_provider.activations_capacity_provider.name
+    weight            = 1
+    base              = 0
+  }
+
+  network_configuration {
+    subnets         = [aws_subnet.private_subnet.id]
+    security_groups = [aws_security_group.ecs_security_group.id]
+  }
+
+  deployment_maximum_percent         = 200
+  deployment_minimum_healthy_percent = 100
+
+  tags = {
+    Environment = var.environment
+  }
+
+  depends_on = [
+    aws_cloudwatch_log_group.activations_service_log_group,
+    aws_iam_role.ecs_instance_role,
+    aws_iam_role.ecs_interface_role,
+    aws_iam_role_policy_attachment.ecs_instance_role_policy_attachment,
+    aws_iam_role_policy_attachment.ecs_interface_role_policy_attachment,
+    aws_iam_instance_profile.ecs_instance_profile,
+    aws_iam_policy.ecs_task_policy,
+  ]
+}
+
+
+resource "aws_launch_template" "activations_launch_template" {
+  name_prefix   = "activations-launch-template"
+  image_id      = "ami-0757fc38223742869"
+  # https://aws.amazon.com/releasenotes/aws-deep-learning-base-ami-amazon-linux-2/
+  # CuDNN version 12.1 if based off of the DLAMI
+  # Nvidia driver version 
+
+
+  instance_type = "g6e.xlarge"  
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ecs_instance_profile.name
+  }
+
+  instance_market_options {
+    market_type = "spot"
+  }
+
+  network_interfaces {
+    associate_public_ip_address = true
+    delete_on_termination       = true
+    security_groups             = [aws_security_group.ecs_security_group.id]
+  }
+
+  user_data = base64encode(<<EOF
+#!/bin/bash
+echo ECS_CLUSTER=${aws_ecs_cluster.activation_cluster.name} >> /etc/ecs/ecs.config
+EOF
+)
+
+   block_device_mappings {
+    device_name = "/dev/xvda"
+
+    ebs {
+      volume_size           = 250
+      delete_on_termination = true
+    }
+  }
+
+  tag_specifications {
+    resource_type = "instance"
+
+    tags = {
+      Name        = "Activations Service Instance"
+      Environment = var.environment
+    }
+  }
+}
+
+resource "aws_ecs_capacity_provider" "activations_capacity_provider" {
+  name = "${var.environment}-activatons-capacity-provider"
+
+  auto_scaling_group_provider {
+    auto_scaling_group_arn         = aws_autoscaling_group.activations_autoscaling_group.arn
+    managed_scaling {
+      status                      = "ENABLED"
+      target_capacity             = 100
+      minimum_scaling_step_size   = 1
+      maximum_scaling_step_size   = 1000
+    }
+  }
+
+  tags = {
+    Environment = var.environment
+  }
+}
+
+
+
+resource "aws_autoscaling_group" "activations_autoscaling_group" {
+  name             = "activations-autoscaling-group"
+  max_size         = 4          # Set as appropriate
+  min_size         = 0                     # Allow scaling down to zero
+  desired_capacity = 0
+  protect_from_scale_in = false
+
+
+  launch_template {
+    id      = aws_launch_template.activations_launch_template.id
+    version = "$Latest"
+  }
+  
+
+  vpc_zone_identifier = [aws_subnet.private_subnet.id]
+
+  initial_lifecycle_hook {
+    name                 = "ecs-managed-draining-termination-hook"
+    default_result       = "CONTINUE"
+    heartbeat_timeout    = 120
+    lifecycle_transition = "autoscaling:EC2_INSTANCE_TERMINATING"
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "ECS Instance"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Environment"
+    value               = var.environment
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "AmazonECSManaged"
+    value               = true
+    propagate_at_launch = true
+  }
+
 }

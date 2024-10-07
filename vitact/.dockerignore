@@ -1,0 +1,11 @@
+test
+cruft
+.venv
+__pycache__
+.pytest_cache
+pad.py
+
+**/__pycache__
+
+Dockerfile
+.dockerignore

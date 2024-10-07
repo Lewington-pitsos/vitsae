@@ -141,3 +141,13 @@ variable "tar_queue_name" {
   type        = string
   default     = "tar-queue"
 }
+
+variable "activations_ecr_url" {
+  description = "Name of the activations repository"
+  type        = string
+}
+
+variable "activations_ecr_arn" {
+  description = "ARN of the activations repository"
+  type        = string
+}

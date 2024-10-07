@@ -8,6 +8,7 @@ if __name__ == '__main__':
     if os.environ.get("RUN_NAME"):
         run_name = os.environ.get("RUN_NAME")
 
+    
     print(f"Generating activations for {run_name}")
 
     generate_activations(

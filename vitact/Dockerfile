@@ -1,27 +1,70 @@
-FROM python:3.11-slim
-
+# Stage 1: Builder
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu20.04 AS builder
+# FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04 AS builder
+# Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
+# Install build dependencies
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     build-essential \
+    software-properties-common \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y python3.11 python3.11-venv python3.11-dev python3.11-distutils \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Python 3.11 pip
+RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
+
+# Install Poetry
 ENV POETRY_VERSION=1.5.1
+RUN curl -sSL https://install.python-poetry.org | python3.11 - && ln -s /root/.local/bin/poetry /usr/local/bin/poetry
 
-RUN curl -sSL https://install.python-poetry.org | python3 - && \
-    ln -s /root/.local/bin/poetry /usr/local/bin/poetry
-
+# Configure Poetry to not create virtual environments
 RUN poetry config virtualenvs.create false
 
-RUN mkdir /vitact
+# Set working directory
 WORKDIR /vitact
 
+# Copy dependency files
 COPY pyproject.toml poetry.lock* /vitact/
 
-RUN poetry install --no-root --no-interaction --no-ansi
+# Install dependencies without dev packages
+RUN poetry install --no-root --no-interaction --no-ansi --no-dev
 
+# Copy the rest of the application code
 COPY . /vitact
 
-CMD ["python", "vitact/main.py"] 
+# Stage 2: Production Image
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu20.04
+# FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Install Python 3.11 in the production image
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y python3.11 python3.11-venv python3.11-distutils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python 3.11 pip
+RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
+
+# Copy the installed dependencies from the builder stage
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+
+# Copy the application code from the builder stage
+COPY --from=builder /vitact /vitact
+
+# Set the working directory
+WORKDIR /vitact
+RUN chmod +x entrypoint.sh
+
+# Define the default command
+ENTRYPOINT [ "entrypoint.sh" ]
