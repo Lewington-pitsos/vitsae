@@ -50,3 +50,4 @@ log
 vitact/vitact/test/tars-tmp*
 vitact/vitact/test/test
 devbox
+**/.credentials.json
