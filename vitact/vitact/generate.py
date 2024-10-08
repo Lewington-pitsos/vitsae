@@ -75,7 +75,8 @@ def generate_activations(
             full_sequence=full_sequence,
             input_tensor_shape=(batch_size, *input_tensor_shape) if input_tensor_shape else None,
             num_cache_workers=num_cache_workers,
-            num_data_workers=num_data_workers
+            num_data_workers=num_data_workers,
+            print_logs=True
         )
     except Exception as e:
         dataset.stop()

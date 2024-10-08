@@ -7,7 +7,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-sache = {git = "https://github.com/lewington-pitsos/sache.git", rev = "24da64a5291e18871c858930fac2b27c793eb2f0" }
+sache = {git = "https://github.com/lewington-pitsos/sache.git", rev = "b9569df9fed38511558d72cb86584b4de5c1bfc9" }
 pillow = "^10.4.0"
 
 [tool.poetry.group.dev.dependencies]

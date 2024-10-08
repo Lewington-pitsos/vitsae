@@ -37,3 +37,5 @@ docker build -t vitact-localtest .
 docker run -e HF_TOKEN=$HF_TOKEN -e AWS_ACCESS_KEY=$AWS_ACCESS_KEY -e AWS_SECRET=$AWS_SECRET -e SQS_QUEUE_URL=$SQS_QUEUE_URL  -e SQS_TAR_QUEUE_URL=$SQS_TAR_QUEUE_URL -e S3_BUCKET_NAME=$S3_BUCKET_NAME -e TABLE_NAME=$TABLE_NAME -e ECS_CLUSTER_NAME=$ECS_CLUSTER_NAME -e ECS_SERVICE_NAME=$ECS_SERVICE_NAME -e S3_ACTIVATIONS_BUCKET_NAME=$S3_ACTIVATIONS_BUCKET_NAME -e RUN_NAME=test vitact-localtest
 
 docker inspect --format='{{.Os}}/{{.Architecture}}' vitact-localtest  
+
+aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId,State.Name,InstanceType,PublicIpAddress]' --output table
