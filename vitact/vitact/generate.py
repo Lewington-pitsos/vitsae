@@ -1,14 +1,12 @@
-from typing import final
 from sache import vit_generate
 import fire
 import sys
 import os
-import multiprocessing
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import randomname
-from vitact.vitact.tardataset import StreamingTensorDataset
+from vitact.tardataset import StreamingTensorDataset
 from utils import load_config
 from pull import keep_pulling
 from threading import Thread, Event
@@ -60,25 +58,25 @@ def generate_activations(
     config['AWS_ACCESS_KEY_ID'] = config['AWS_ACCESS_KEY']
     try:
         pass
-        # vit_generate(
-        #     config,
-        #     run_name,
-        #     batches_per_cache=batches_per_cache,
-        #     dataset=dataset, 
-        #     transformer_name=transformer_name, 
-        #     batch_size=batch_size, 
-        #     device='cuda',
-        #     hook_locations=hook_locations,
-        #     cache_type='s3_multilayer',
-        #     n_samples=n_samples,
-        #     log_every=None if log_every < 1 else log_every,
-        #     bucket_name=config['S3_ACTIVATIONS_BUCKET_NAME'],
-        #     full_sequence=full_sequence,
-        #     input_tensor_shape=(batch_size, *input_tensor_shape) if input_tensor_shape else None,
-        #     num_cache_workers=num_cache_workers,
-        #     num_data_workers=num_data_workers,
-        #     print_logs=True
-        # )
+        vit_generate(
+            config,
+            run_name,
+            batches_per_cache=batches_per_cache,
+            dataset=dataset, 
+            transformer_name=transformer_name, 
+            batch_size=batch_size, 
+            device='cuda',
+            hook_locations=hook_locations,
+            cache_type='s3_multilayer',
+            n_samples=n_samples,
+            log_every=None if log_every < 1 else log_every,
+            bucket_name=config['S3_ACTIVATIONS_BUCKET_NAME'],
+            full_sequence=full_sequence,
+            input_tensor_shape=(batch_size, *input_tensor_shape) if input_tensor_shape else None,
+            num_cache_workers=num_cache_workers,
+            num_data_workers=num_data_workers,
+            print_logs=True
+        )
     except Exception as e:
         print(e)
     finally:

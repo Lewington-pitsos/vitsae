@@ -1,6 +1,5 @@
 import os
 
-from torch import log_
 from generate import generate_activations
 
 if __name__ == '__main__':
@@ -24,7 +23,7 @@ if __name__ == '__main__':
     if os.environ.get("BATCHES_PER_CACHE"):
         batches_per_cache = int(os.environ.get("BATCHES_PER_CACHE"))
 
-    batch_size = 768
+    batch_size = 768 # 1024 sometimes causes cuda OOM
     if os.environ.get("BATCH_SIZE"):
         batch_size = int(os.environ.get("BATCH_SIZE"))
 
