@@ -59,37 +59,6 @@ resource "aws_subnet" "private_subnet_c" {
   }
 }
 
-resource "aws_subnet" "private_subnet_d" {
-  vpc_id     = aws_vpc.ml_vpc.id
-  cidr_block = "10.0.5.0/24"
-  availability_zone = "${var.region}d"
-
-  tags = {
-    Name = "${var.environment}-private-subnet"
-  }
-}
-
-resource "aws_subnet" "private_subnet_e" {
-  vpc_id     = aws_vpc.ml_vpc.id
-  cidr_block = "10.0.6.0/24"
-  availability_zone = "${var.region}e"
-
-  tags = {
-    Name = "${var.environment}-private-subnet"
-  }
-}
-
-resource "aws_subnet" "private_subnet_f" {
-  vpc_id     = aws_vpc.ml_vpc.id
-  cidr_block = "10.0.7.0/24"
-  availability_zone = "${var.region}f"
-
-  tags = {
-    Name = "${var.environment}-private-subnet"
-  }
-}
-
-
 # Create Internet Gateway for the public subnet
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.ml_vpc.id
@@ -162,24 +131,6 @@ resource "aws_route_table_association" "private_rt_assoc_c" {
   subnet_id      = aws_subnet.private_subnet_c.id
   route_table_id = aws_route_table.private_rt.id
 }
-
-resource "aws_route_table_association" "private_rt_assoc_d" {
-  subnet_id      = aws_subnet.private_subnet_d.id
-  route_table_id = aws_route_table.private_rt.id
-}
-
-
-resource "aws_route_table_association" "private_rt_assoc_e" {
-  subnet_id      = aws_subnet.private_subnet_e.id
-  route_table_id = aws_route_table.private_rt.id
-}
-
-
-resource "aws_route_table_association" "private_rt_assoc_f" {
-  subnet_id      = aws_subnet.private_subnet_f.id
-  route_table_id = aws_route_table.private_rt.id
-}
-
 
 #######################################
 # 1. S3 Bucket for Model Outputs
@@ -538,9 +489,6 @@ resource "aws_autoscaling_group" "ecs_autoscaling_group" {
     aws_subnet.private_subnet.id, # a
     aws_subnet.private_subnet_b.id,
     aws_subnet.private_subnet_c.id,
-    aws_subnet.private_subnet_d.id,
-    aws_subnet.private_subnet_e.id,
-    aws_subnet.private_subnet_f.id,
   ]
 
   initial_lifecycle_hook {
@@ -938,7 +886,7 @@ resource "aws_ecs_task_definition" "activations_service_task" {
         }
       ],
       linuxParameters = {
-        shmSize = 14500
+        sharedMemorySize = 15500
       }
       resourceRequirements = [
         {
@@ -983,9 +931,6 @@ resource "aws_ecs_service" "activations_service" {
       aws_subnet.private_subnet.id,
       aws_subnet.private_subnet_b.id,
       aws_subnet.private_subnet_c.id,
-      aws_subnet.private_subnet_d.id,
-      aws_subnet.private_subnet_e.id,
-      aws_subnet.private_subnet_f.id,
     ]
     security_groups = [aws_security_group.ecs_security_group.id]
   }
@@ -1094,9 +1039,6 @@ resource "aws_autoscaling_group" "activations_autoscaling_group" {
         aws_subnet.private_subnet.id, # a
         aws_subnet.private_subnet_b.id,
         aws_subnet.private_subnet_c.id,
-        aws_subnet.private_subnet_d.id,
-        aws_subnet.private_subnet_e.id,
-        aws_subnet.private_subnet_f.id,
   ]
 
   initial_lifecycle_hook {

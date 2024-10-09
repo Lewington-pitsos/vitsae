@@ -15,7 +15,6 @@ class StreamingDataset(IterableDataset):
     def __init__(self, data_dir):
         self.data_dir = data_dir
         self._stop = False
-        self.exclude = set()
 
     def _get_tar_files(self):
         """Retrieve the list of .ready.tar files in the data directory."""
@@ -25,10 +24,6 @@ class StreamingDataset(IterableDataset):
 
     def stop(self):
         self._stop = True
-
-    def _hash_file_path(self, tar_path):
-        hash_digest = hashlib.md5(tar_path.encode('utf-8')).hexdigest()
-        return int(hash_digest, 16)
 
     def __iter__(self):
         worker_info = torch.utils.data.get_worker_info()
@@ -43,23 +38,22 @@ class StreamingDataset(IterableDataset):
         while not self._stop:
             tar_files = self._get_tar_files()
             if not tar_files:
-                print('Waiting for tar files...')
+                print(f'Worker {worker_id}: Waiting for tar files...')
                 time.sleep(5)
                 continue
 
-            assigned_tar_files = [
-                tar for tar in tar_files
-                if self._hash_file_path(tar) % num_workers == worker_id
-            ]
+            for tar_file in tar_files:
+                processing_tar_file = tar_file + '.processing'
+                try:
+                    # Attempt to atomically rename the tar file to mark it as being processed
+                    os.rename(tar_file, processing_tar_file)
+                    print(f'Worker {worker_id}: Processing {processing_tar_file}')
+                except OSError:
+                    # If renaming fails, another worker is processing this tar file
+                    continue
 
-            if not assigned_tar_files:
-                print(f'Worker {worker_id}: No assigned tar files. Waiting...')
-                time.sleep(5)
-                continue
-            
-            try:
-                for tar_file in assigned_tar_files:
-                    with tarfile.open(tar_file, 'r') as tar:
+                try:
+                    with tarfile.open(processing_tar_file, 'r') as tar:
                         for member in tar:
                             if member.isfile() and member.name.lower().endswith('.jpg'):
                                 try:
@@ -69,23 +63,22 @@ class StreamingDataset(IterableDataset):
                                         sample = {'jpg': img_bytes}
                                         yield sample
                                 except Exception as img_e:
-                                    print(f'Worker {worker_id}: Error reading {member.name} in {tar_file}: {img_e}')
+                                    print(f'Worker {worker_id}: Error reading {member.name} in {processing_tar_file}: {img_e}')
 
-                    try:
-                        os.remove(tar_file)
-                        print(f'Worker {worker_id}: Removed {tar_file}')
-                    except OSError as e:
-                        print(f'Worker {worker_id}: Error removing {tar_file}: {e}')
+                    # After processing, remove the tar file to prevent re-processing
+                    os.remove(processing_tar_file)
+                    print(f'Worker {worker_id}: Removed {processing_tar_file}')
+                except Exception as e:
+                    print(f'Worker {worker_id}: Error processing {processing_tar_file}: {e}')
+                    # Optionally, you can rename the file back or move it to a failed directory
+                    continue
 
-            except Exception as e:
-                print(f'Worker {worker_id}: Error processing {tar_file}: {e}')
-  
+            # Brief pause before checking for new tar files
             time.sleep(0.3)
 
 class StreamingTensorDataset(StreamingDataset):
     def __init__(self, data_dir):
         super().__init__(data_dir)
-
         self.transform = transforms.ToTensor()
 
     def __iter__(self):
@@ -97,8 +90,7 @@ class StreamingTensorDataset(StreamingDataset):
                 try:
                     image = Image.open(io.BytesIO(sample['jpg'])).convert('RGB')
                     image = image.resize((224, 224))
-
                     image_tensor = self.transform(image)
                     yield image_tensor
                 except Exception as e:
-                    print(type(e), e)
+                    print(f'Error processing image: {e}')

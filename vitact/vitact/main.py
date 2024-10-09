@@ -24,12 +24,16 @@ if __name__ == '__main__':
     if os.environ.get("BATCHES_PER_CACHE"):
         batches_per_cache = int(os.environ.get("BATCHES_PER_CACHE"))
 
+    batch_size = 768
+    if os.environ.get("BATCH_SIZE"):
+        batch_size = int(os.environ.get("BATCH_SIZE"))
+
     print(f"Generating activations for {run_name}")
 
     generate_activations(
         run_name=run_name,
-        n_samples=6_500_000,
-        batch_size=1024,
+        n_samples=10_000_000,
+        batch_size=batch_size,
         batches_per_cache=batches_per_cache,
         full_sequence=True,
         input_tensor_shape=(257,1024),

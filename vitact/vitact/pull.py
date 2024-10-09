@@ -43,13 +43,11 @@ def get_next_s3_key_from_sqs(sqs, queue_url):
         return None, None
 
 def delete_message_from_sqs(sqs, queue_url, receipt_handle):
-    """Deletes a message from the SQS queue."""
     try:
         sqs.delete_message(
             QueueUrl=queue_url,
             ReceiptHandle=receipt_handle
         )
-        logging.info('Deleted message from SQS queue.')
     except Exception as e:
         logging.error(f'Error deleting message from SQS: {e}')
 

@@ -71,9 +71,9 @@ def list_s3_objects(s3, bucket_name, prefix):
 
 def enqueue_messages(sqs, queue_url, messages):
     """
-    Send messages to the specified SQS queue in batches of 10.
+    Send messages to the specified SQS queue
     """
-    BATCH_SIZE = 10
+    BATCH_SIZE = 25
     total = len(messages)
     sent = 0
 

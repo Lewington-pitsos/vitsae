@@ -1,6 +1,5 @@
 import pytest
 from torch.utils import data
-from tardataset import StreamingDataset, StreamingTensorDataset
 from PIL import Image
 import io
 import torch
@@ -9,6 +8,8 @@ import shutil
 import hashlib
 import tarfile
 import numpy as np
+
+from vitact.tardataset import StreamingDataset, StreamingTensorDataset
 
 def create_random_image(width, height, mode='RGB'):
     """
@@ -218,7 +219,7 @@ def test_multi_worker_loads_tar(multi_worker_tar_dir):
 
     num_tar_files = 80
     samples_per_tar = 20
-    total_samples = num_tar_files * samples_per_tar - 150  # As per original test
+    total_samples = num_tar_files * samples_per_tar
 
     # Collect all sample hashes to check for duplicates
     collected_hashes = set()
