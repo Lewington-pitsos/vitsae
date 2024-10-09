@@ -152,8 +152,8 @@ variable "activations_ecr_arn" {
   type        = string
 }
 
-variable "stop_activations" {
-  description = "Stop the activations service"
-  type        = bool
-  default     = false
+variable "act_tasks" {
+  description = "Number of activations instances"
+  type        = number
+  default     = 0
 }

@@ -39,6 +39,57 @@ resource "aws_subnet" "private_subnet" {
   }
 }
 
+resource "aws_subnet" "private_subnet_b" {
+  vpc_id     = aws_vpc.ml_vpc.id
+  cidr_block = "10.0.3.0/24"
+  availability_zone = "${var.region}b"
+
+  tags = {
+    Name = "${var.environment}-private-subnet"
+  }
+}
+
+resource "aws_subnet" "private_subnet_c" {
+  vpc_id     = aws_vpc.ml_vpc.id
+  cidr_block = "10.0.4.0/24"
+  availability_zone = "${var.region}c"
+
+  tags = {
+    Name = "${var.environment}-private-subnet"
+  }
+}
+
+resource "aws_subnet" "private_subnet_d" {
+  vpc_id     = aws_vpc.ml_vpc.id
+  cidr_block = "10.0.5.0/24"
+  availability_zone = "${var.region}d"
+
+  tags = {
+    Name = "${var.environment}-private-subnet"
+  }
+}
+
+resource "aws_subnet" "private_subnet_e" {
+  vpc_id     = aws_vpc.ml_vpc.id
+  cidr_block = "10.0.6.0/24"
+  availability_zone = "${var.region}e"
+
+  tags = {
+    Name = "${var.environment}-private-subnet"
+  }
+}
+
+resource "aws_subnet" "private_subnet_f" {
+  vpc_id     = aws_vpc.ml_vpc.id
+  cidr_block = "10.0.7.0/24"
+  availability_zone = "${var.region}f"
+
+  tags = {
+    Name = "${var.environment}-private-subnet"
+  }
+}
+
+
 # Create Internet Gateway for the public subnet
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.ml_vpc.id
@@ -101,6 +152,34 @@ resource "aws_route_table_association" "private_rt_assoc" {
   subnet_id      = aws_subnet.private_subnet.id
   route_table_id = aws_route_table.private_rt.id
 }
+
+resource "aws_route_table_association" "private_rt_assoc_b" {
+  subnet_id      = aws_subnet.private_subnet_b.id
+  route_table_id = aws_route_table.private_rt.id
+}
+
+resource "aws_route_table_association" "private_rt_assoc_c" {
+  subnet_id      = aws_subnet.private_subnet_c.id
+  route_table_id = aws_route_table.private_rt.id
+}
+
+resource "aws_route_table_association" "private_rt_assoc_d" {
+  subnet_id      = aws_subnet.private_subnet_d.id
+  route_table_id = aws_route_table.private_rt.id
+}
+
+
+resource "aws_route_table_association" "private_rt_assoc_e" {
+  subnet_id      = aws_subnet.private_subnet_e.id
+  route_table_id = aws_route_table.private_rt.id
+}
+
+
+resource "aws_route_table_association" "private_rt_assoc_f" {
+  subnet_id      = aws_subnet.private_subnet_f.id
+  route_table_id = aws_route_table.private_rt.id
+}
+
 
 #######################################
 # 1. S3 Bucket for Model Outputs
@@ -455,7 +534,14 @@ resource "aws_autoscaling_group" "ecs_autoscaling_group" {
 
   }
 
-  vpc_zone_identifier = [aws_subnet.private_subnet.id]
+  vpc_zone_identifier = [
+    aws_subnet.private_subnet.id, # a
+    aws_subnet.private_subnet_b.id,
+    aws_subnet.private_subnet_c.id,
+    aws_subnet.private_subnet_d.id,
+    aws_subnet.private_subnet_e.id,
+    aws_subnet.private_subnet_f.id,
+  ]
 
   initial_lifecycle_hook {
     name                 = "ecs-managed-draining-termination-hook"
@@ -863,10 +949,8 @@ resource "aws_ecs_task_definition" "activations_service_task" {
     }
   ])
 
-  
-
   tags = {
-    Name        = "ML Service Task Definition"
+    Name        = "Activations Generation Service Task Definition"
     Environment = var.environment
   }
 }
@@ -886,7 +970,7 @@ resource "aws_ecs_service" "activations_service" {
   name            = "activations-service"
   cluster         = aws_ecs_cluster.activation_cluster.id
   task_definition = aws_ecs_task_definition.activations_service_task.arn
-  desired_count   = var.stop_activations ? 0 : 4
+  desired_count   = var.act_tasks
 
   capacity_provider_strategy {
     capacity_provider = aws_ecs_capacity_provider.activations_capacity_provider.name
@@ -895,7 +979,14 @@ resource "aws_ecs_service" "activations_service" {
   }
 
   network_configuration {
-    subnets         = [aws_subnet.private_subnet.id]
+    subnets         = [
+      aws_subnet.private_subnet.id,
+      aws_subnet.private_subnet_b.id,
+      aws_subnet.private_subnet_c.id,
+      aws_subnet.private_subnet_d.id,
+      aws_subnet.private_subnet_e.id,
+      aws_subnet.private_subnet_f.id,
+    ]
     security_groups = [aws_security_group.ecs_security_group.id]
   }
 
@@ -989,7 +1080,7 @@ resource "aws_autoscaling_group" "activations_autoscaling_group" {
   name             = "activations-autoscaling-group"
   max_size         = 4          # Set as appropriate
   min_size         = 0                     # Allow scaling down to zero
-  desired_capacity = var.stop_activations ? 0 : 4
+  desired_capacity = var.act_tasks
   protect_from_scale_in = false
 
 
@@ -999,7 +1090,14 @@ resource "aws_autoscaling_group" "activations_autoscaling_group" {
   }
   
 
-  vpc_zone_identifier = [aws_subnet.private_subnet.id]
+  vpc_zone_identifier = [
+        aws_subnet.private_subnet.id, # a
+        aws_subnet.private_subnet_b.id,
+        aws_subnet.private_subnet_c.id,
+        aws_subnet.private_subnet_d.id,
+        aws_subnet.private_subnet_e.id,
+        aws_subnet.private_subnet_f.id,
+  ]
 
   initial_lifecycle_hook {
     name                 = "ecs-managed-draining-termination-hook"
