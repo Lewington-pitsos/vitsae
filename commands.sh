@@ -41,3 +41,25 @@ docker inspect --format='{{.Os}}/{{.Architecture}}' vitact-localtest
 aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId,State.Name,InstanceType,PublicIpAddress]' --output table
 
 aws logs filter-log-events --log-group-name /ecs/activations-service --limit 10 --query 'events[].message' 
+
+aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names activations-autoscaling-group --region us-east-1    --query "AutoScalingGroups[].{Min:MinSize, Max:MaxSize, Desired:DesiredCapacity}" 
+
+
+aws ecs describe-services \
+    --cluster vit-sae-ecs-cluster \
+    --services activations-service \
+    --query "services[].desiredCount" \
+    --output table
+
+
+aws ecs describe-tasks \
+    --cluster vit-sae-ecs-cluster \
+    --tasks $(aws ecs list-tasks \
+        --cluster vit-sae-ecs-cluster \
+        --service-name activations-service \
+        --query "taskArns" \
+        --output text) \
+    --query "tasks[].{TaskArn:taskArn, Status:lastStatus, DesiredStatus:desiredStatus}" \
+    --output table
+
+aws logs filter-log-events --log-group-name /ecs/activations-service --limit 10 --query 'events[].message' --start-time $(( $(date +%s) - 300 ))000 

@@ -73,7 +73,7 @@ def enqueue_messages(sqs, queue_url, messages):
     """
     Send messages to the specified SQS queue
     """
-    BATCH_SIZE = 25
+    BATCH_SIZE = 10 # this cannot be any larger
     total = len(messages)
     sent = 0
 

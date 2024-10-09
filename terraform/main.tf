@@ -1028,6 +1028,8 @@ resource "aws_autoscaling_group" "activations_autoscaling_group" {
   desired_capacity = var.act_tasks
   protect_from_scale_in = false
 
+  wait_for_capacity_timeout  = "0"
+
 
   launch_template {
     id      = aws_launch_template.activations_launch_template.id

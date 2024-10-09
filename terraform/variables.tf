@@ -157,3 +157,10 @@ variable "act_tasks" {
   type        = number
   default     = 0
 }
+
+
+# variable "train_tasks" {
+#   description = "Number of activations instances"
+#   type        = number
+#   default     = 0
+# }
