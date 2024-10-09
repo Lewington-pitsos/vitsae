@@ -851,6 +851,9 @@ resource "aws_ecs_task_definition" "activations_service_task" {
           valueFrom = aws_ssm_parameter.ecs_service_name.arn
         }
       ],
+      linuxParameters = {
+        shmSize = 14500
+      }
       resourceRequirements = [
         {
           type  = "GPU"
