@@ -323,8 +323,10 @@ resource "aws_iam_policy" "ecs_task_policy" {
           aws_ssm_parameter.tarfiles_bucket_name.arn,
           aws_ssm_parameter.activations_bucket_name.arn,
           aws_ssm_parameter.table_name.arn,
-          aws_ssm_parameter.ecs_cluster_name.arn,       # Add this line
-          aws_ssm_parameter.ecs_service_name.arn        # Add this line
+          aws_ssm_parameter.ecs_cluster_name.arn,    
+          aws_ssm_parameter.ecs_service_name.arn,        
+          aws_ssm_parameter.wandb_api_key.arn,
+          aws_ssm_parameter.training_config_queue_url.arn
         ]
       },
       {
@@ -1039,7 +1041,7 @@ resource "aws_autoscaling_group" "activations_autoscaling_group" {
   name             = "activations-autoscaling-group"
   max_size         = 4          # Set as appropriate
   min_size         = 0                     # Allow scaling down to zero
-  desired_capacity = var.act_tasks
+  desired_capacity = max(var.act_tasks, var.train_tasks)
   protect_from_scale_in = false
 
   wait_for_capacity_timeout  = "0"

@@ -69,3 +69,8 @@ docker build -f Dockerfile.training -t train-localtest .
 
 
 docker run -e HF_TOKEN=$HF_TOKEN -e AWS_ACCESS_KEY=$AWS_ACCESS_KEY -e AWS_SECRET=$AWS_SECRET -e SQS_QUEUE_URL=$SQS_QUEUE_URL  -e SQS_TAR_QUEUE_URL=$SQS_TAR_QUEUE_URL -e S3_BUCKET_NAME=$S3_BUCKET_NAME -e TABLE_NAME=$TABLE_NAME -e ECS_CLUSTER_NAME=$ECS_CLUSTER_NAME -e ECS_SERVICE_NAME=$ECS_SERVICE_NAME -e S3_ACTIVATIONS_BUCKET_NAME=$S3_ACTIVATIONS_BUCKET_NAME -e RUN_NAME=test -e WANDB_API_KEY=$WANDB_API_KEY -e SQS_TRAINING_CONFIG_QUEUE_URL=$SQS_TRAINING_CONFIG_QUEUE_URL --gpus all --shm-size=15gb train-localtest
+
+
+aws ecs describe-tasks --cluster vit-sae-ecs-cluster --tasks $(aws ecs list-tasks --cluster vit-sae-ecs-cluster --service-name training-service --query "taskArns" --output text) --query "tasks[].{TaskArn:taskArn, Status:lastStatus, DesiredStatus:desiredStatus}" --output table
+aws logs filter-log-events --log-group-name /ecs/training-service --limit 40 --query 'events[].message' --start-time $(( $(date +%s) - 300 ))000 
+
