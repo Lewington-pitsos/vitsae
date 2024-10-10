@@ -38,3 +38,19 @@ resource "aws_s3_bucket" "activations" {
 
   force_destroy = true
 }
+
+
+
+resource "aws_ecr_repository" "training_ecr" {
+name                 = var.ecr_training_repository_name
+  image_tag_mutability = var.image_tag_mutability
+
+  image_scanning_configuration {
+    scan_on_push = var.scan_on_push
+  }
+
+  tags = {
+    Environment = "production"
+    ManagedBy   = "Terraform"
+  }
+}

@@ -3127,7 +3127,7 @@ crt = ["botocore[crt] (>=1.33.2,<2.0a.0)"]
 
 [[package]]
 name = "sache"
-version = "0.1.8"
+version = "0.1.12"
 description = ""
 optional = false
 python-versions = "^3.11"
@@ -3273,8 +3273,8 @@ zstandard = "0.22.0"
 [package.source]
 type = "git"
 url = "https://github.com/lewington-pitsos/sache.git"
-reference = "b73e6d5e825ea812cecf106fc01c870283265d5d"
-resolved_reference = "b73e6d5e825ea812cecf106fc01c870283265d5d"
+reference = "c27c4ed6476c16187e342c4a9acfaeeb4e66e725"
+resolved_reference = "c27c4ed6476c16187e342c4a9acfaeeb4e66e725"
 
 [[package]]
 name = "safetensors"
@@ -4744,4 +4744,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "60b8e46b7a4b45f06cc4e2739784c45e50dd815f9d82620c61550b0a89a8c917"
+content-hash = "599e312c396d9ac9b42ed32371c24dc677d1afd579afdda103c0f8e1161631aa"

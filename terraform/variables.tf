@@ -159,8 +159,24 @@ variable "act_tasks" {
 }
 
 
-# variable "train_tasks" {
-#   description = "Number of activations instances"
-#   type        = number
-#   default     = 0
-# }
+variable "train_tasks" {
+  description = "Number of activations instances"
+  type        = number
+  default     = 0
+}
+
+variable "training_ecr_url" {
+  description = "Name of the training repository"
+  type        = string
+}
+
+variable "training_ecr_arn" {
+  description = "ARN of the training repository"
+  type        = string
+}
+
+variable "wandb_api_key" {
+  description = "Wandb API key"
+  type        = string
+  sensitive   = true
+}

@@ -4,8 +4,14 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+variable "ecr_training_repository_name" {
+  description = "The name of the training ECR repository."
+  type        = string
+  default     = "training-ecr"
+}
+
 variable "ecr_activations_repository_name" {
-  description = "The name of the ECR repository."
+  description = "The name of the activations ECR repository."
   type        = string
   default     = "activations-ecr"
 }

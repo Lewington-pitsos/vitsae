@@ -259,6 +259,11 @@ resource "aws_iam_policy" "ecs_task_policy" {
         Resource = aws_sqs_queue.tar_file_queue.arn
       },
       {
+        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
+        Effect   = "Allow"
+        Resource = aws_sqs_queue.training_config_queue.arn
+      },
+      {
         Action   = [
           "ecr:GetDownloadUrlForLayer",
           "ecr:BatchGetImage",
@@ -275,6 +280,15 @@ resource "aws_iam_policy" "ecs_task_policy" {
         ]
         Effect   = "Allow"
         Resource = var.activations_ecr_arn
+      },
+      {
+        Action   = [
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:BatchCheckLayerAvailability"
+        ]
+        Effect   = "Allow"
+        Resource = var.training_ecr_arn
       },
       {
         Action   = "ecr:GetAuthorizationToken"
@@ -1068,4 +1082,241 @@ resource "aws_autoscaling_group" "activations_autoscaling_group" {
     propagate_at_launch = true
   }
 
+}
+
+
+
+
+
+
+
+# ------------------------ TRAINING ----------------------------
+
+
+resource "aws_ssm_parameter" "training_config_queue_url" {
+  name        = "${var.environment}-sqs-training-config-queue-url"
+  description = "training config queue url"
+  type        = "String"
+  value       = aws_sqs_queue.training_config_queue.url
+
+  tags = {
+    Environment = var.environment
+    Name        = "training config queue url Parameter"
+  }
+}
+
+
+resource "aws_ssm_parameter" "wandb_api_key" {
+  name        = "${var.environment}-wandb-api-key"
+  description = "wanb api key"
+  type        = "SecureString"
+  value       = var.wandb_api_key
+
+  tags = {
+    Environment = var.environment
+    Name        = "ECS_SERVICE_NAME Parameter"
+  }
+}
+
+
+resource "aws_sqs_queue" "training_config_queue" {
+  name                        = "training-config-queue"
+  visibility_timeout_seconds  = var.visibility_timeout
+  message_retention_seconds   = var.message_retention
+  receive_wait_time_seconds   = var.receive_wait_time
+  delay_seconds               = var.delay_seconds
+
+  tags = {
+    Name        = "Training Config Queue"
+    Environment = var.environment
+  }
+}
+
+
+resource "aws_ecs_task_definition" "training_service_task" {
+  family                   = "training-service"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["EC2"]
+  execution_role_arn       = aws_iam_role.ecs_interface_role.arn
+  task_role_arn            = aws_iam_role.ecs_interface_role.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "activations-container"
+      image     = "${var.training_ecr_url}:latest"
+      essential = true
+      memory    = 31500  # Adjust as needed
+      cpu       = 4096  # Adjust as needed
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = "/ecs/training-service"
+          awslogs-region        = var.region
+          awslogs-stream-prefix = "ecs"
+        }
+      },
+      secrets = [
+        {
+          name      = "HF_TOKEN"
+          valueFrom = aws_ssm_parameter.hf_token.arn
+        },
+        {
+          name      = "AWS_ACCESS_KEY"
+          valueFrom = aws_ssm_parameter.aws_access_key.arn
+        },
+        {
+          name      = "AWS_SECRET"
+          valueFrom = aws_ssm_parameter.aws_secret.arn
+        },
+        {
+          name      = "SQS_QUEUE_URL"
+          valueFrom = aws_ssm_parameter.parquet_file_queue_url.arn
+        },
+        {
+          name      = "SQS_TAR_QUEUE_URL"
+          valueFrom = aws_ssm_parameter.tar_file_queue_url.arn
+        },
+        {
+          name      = "SQS_TRAINING_CONFIG_QUEUE_URL"
+          valueFrom = aws_ssm_parameter.training_config_queue_url.arn
+        },
+        {
+          name      = "S3_BUCKET_NAME"
+          valueFrom = aws_ssm_parameter.tarfiles_bucket_name.arn
+        },
+        {
+          name      = "S3_ACTIVATIONS_BUCKET_NAME"
+          valueFrom = aws_ssm_parameter.activations_bucket_name.arn
+        },
+        {
+          name      = "TABLE_NAME"
+          valueFrom = aws_ssm_parameter.table_name.arn
+        },
+        {
+          name      = "WANDB_API_KEY"
+          valueFrom = aws_ssm_parameter.wandb_api_key.arn
+        },
+        {
+          name      = "ECS_CLUSTER_NAME"
+          valueFrom = aws_ssm_parameter.ecs_cluster_name.arn
+        },
+        {
+          name      = "ECS_SERVICE_NAME"
+          valueFrom = aws_ssm_parameter.ecs_service_name.arn
+        }
+      ],
+      linuxParameters = {
+        sharedMemorySize = 15500
+      }
+      resourceRequirements = [
+        {
+          type  = "GPU"
+          value = "1"  # Adjust the number of GPUs as needed
+        }
+      ]
+    }
+  ])
+
+  tags = {
+    Name        = "Training Service Task Definition"
+    Environment = var.environment
+  }
+}
+
+
+resource "aws_cloudwatch_log_group" "training_service_log_group" {
+  name              = "/ecs/training-service"
+  retention_in_days = 7
+
+  tags = {
+    Environment = var.environment
+  }
+}
+
+
+resource "aws_ecs_service" "training_service" {
+  name            = "training-service"
+  cluster         = aws_ecs_cluster.activation_cluster.id
+  task_definition = aws_ecs_task_definition.training_service_task.arn
+  desired_count   = var.train_tasks
+
+  capacity_provider_strategy {
+    capacity_provider = aws_ecs_capacity_provider.activations_capacity_provider.name
+    weight            = 1
+    base              = 0
+  }
+
+  network_configuration {
+    subnets         = [
+      aws_subnet.private_subnet.id,
+      aws_subnet.private_subnet_b.id,
+      aws_subnet.private_subnet_c.id,
+    ]
+    security_groups = [aws_security_group.ecs_security_group.id]
+  }
+
+  deployment_maximum_percent         = 200
+  deployment_minimum_healthy_percent = 100
+
+  tags = {
+    Environment = var.environment
+  }
+
+  depends_on = [
+    aws_cloudwatch_log_group.activations_service_log_group,
+    aws_iam_role.ecs_instance_role,
+    aws_iam_role.ecs_interface_role,
+    aws_iam_role_policy_attachment.ecs_instance_role_policy_attachment,
+    aws_iam_role_policy_attachment.ecs_interface_role_policy_attachment,
+    aws_iam_instance_profile.ecs_instance_profile,
+    aws_iam_policy.ecs_task_policy,
+  ]
+}
+
+
+resource "aws_launch_template" "training_launch_template" {
+  name_prefix   = "training-launch-template"
+  image_id      = "ami-0757fc38223742869"
+  # https://aws.amazon.com/releasenotes/aws-deep-learning-base-ami-amazon-linux-2/
+  # CUDA version 12.4
+  # Nvidia driver version  550.90.12 
+
+  instance_type = "g6e.xlarge"  
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ecs_instance_profile.name
+  }
+
+  instance_market_options {
+    market_type = "spot"
+  }
+
+  network_interfaces {
+    associate_public_ip_address = true
+    delete_on_termination       = true
+    security_groups             = [aws_security_group.ecs_security_group.id]
+  }
+
+  user_data = base64encode(<<EOF
+#!/bin/bash
+echo ECS_CLUSTER=${aws_ecs_cluster.activation_cluster.name} >> /etc/ecs/ecs.config
+EOF
+)
+
+   block_device_mappings {
+    device_name = "/dev/xvda"
+
+    ebs {
+      volume_size           = 1000
+      delete_on_termination = true
+    }
+  }
+
+  tag_specifications {
+    resource_type = "instance"
+
+    tags = {
+      Name        = "Training Service Instance"
+      Environment = var.environment
+    }
+  }
 }
