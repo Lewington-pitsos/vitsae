@@ -1,0 +1,66 @@
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu20.04 AS builder
+# FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04 AS builder
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Install build dependencies
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    build-essential \
+    software-properties-common \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y python3.11 python3.11-venv python3.11-dev python3.11-distutils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python 3.11 pip
+RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
+
+# Install Poetry
+ENV POETRY_VERSION=1.5.1
+RUN curl -sSL https://install.python-poetry.org | python3.11 - && ln -s /root/.local/bin/poetry /usr/local/bin/poetry
+
+# Configure Poetry to not create virtual environments
+RUN poetry config virtualenvs.create false
+
+# Set working directory
+WORKDIR /vitact
+
+# Copy dependency files
+COPY pyproject.toml poetry.lock* /vitact/
+
+# Install dependencies without dev packages
+RUN poetry config installer.max-workers 10
+RUN poetry install --no-root --no-interaction --no-ansi --no-dev
+
+# Copy the rest of the application code
+COPY . /vitact
+
+# # Stage 2: Production Image
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu20.04
+# # FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+
+# # Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Install Python 3.11 in the production image
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y python3.11 python3.11-venv python3.11-distutils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python 3.11 pip
+RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
+
+COPY --from=builder /usr/local/lib/python3.11/dist-packages /usr/local/lib/python3.11/dist-packages
+COPY --from=builder /vitact /vitact
+
+WORKDIR /vitact
+
+RUN chmod +x train.sh
+
+# Define the default command
+CMD [ "./train.sh" ]

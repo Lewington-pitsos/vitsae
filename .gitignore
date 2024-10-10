@@ -52,3 +52,5 @@ vitact/vitact/test/test
 devbox
 **/.credentials.json
 v
+
+**/wandb

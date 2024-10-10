@@ -1,8 +1,9 @@
+import os
 import json
 
 import boto3
 
-from vitact.utils import load_config
+from utils import load_config
 
 def build_configs(output_filename=None):
     baseline =        {
@@ -41,6 +42,10 @@ def build_configs(output_filename=None):
 
     if output_filename is not  None:
         print(f'Generated {len(all_configs)} configs at {output_filename}')
+
+        if not os.path.exists(os.path.dirname(output_filename)):
+            os.makedirs(os.path.dirname(output_filename))
+
         with open(output_filename, 'w') as f:
             json.dump(all_configs, f, indent=2)
 
@@ -49,7 +54,8 @@ def build_configs(output_filename=None):
     sqs = boto3.client(
         'sqs',
         aws_access_key_id=credentials['AWS_ACCESS_KEY'],
-        aws_secret_access_key=credentials['AWS_SECRET']
+        aws_secret_access_key=credentials['AWS_SECRET'],
+        region_name='us-east-1'
     )
 
     for config in all_configs:

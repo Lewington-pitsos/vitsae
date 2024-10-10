@@ -61,7 +61,7 @@ COPY --from=builder /vitact /vitact
 
 # Set the working directory
 WORKDIR /vitact
-RUN chmod +x entrypoint.sh
+RUN chmod +x activations.sh
 
 # Define the default command
-CMD [ "./entrypoint.sh" ]
+CMD [ "./activations.sh" ]

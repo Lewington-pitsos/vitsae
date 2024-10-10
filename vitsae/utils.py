@@ -18,4 +18,6 @@ def load_config():
     ]:
         config[k] = os.environ.get(k)
 
+    config['AWS_ACCESS_KEY_ID'] = config['AWS_ACCESS_KEY']
+
     return config

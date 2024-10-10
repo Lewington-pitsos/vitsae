@@ -1,10 +1,11 @@
+import json
 import traceback  # Import the traceback module
 import boto3
 
 from sache import train_sae
-from vitact.utils import load_config
+from utils import load_config
 
-def get_next_s3_key_from_sqs(sqs, queue_url):
+def get_next_config_from_sqs(sqs, queue_url):
     try:
         response = sqs.receive_message(
             QueueUrl=queue_url,
@@ -20,7 +21,7 @@ def get_next_s3_key_from_sqs(sqs, queue_url):
 
         message = messages[0]
         receipt_handle = message['ReceiptHandle']
-        config = message['Body']
+        config =  json.loads(message['Body'])
 
         return config, receipt_handle
     except Exception as e:
@@ -42,11 +43,12 @@ def keep_training():
     sqs = boto3.client(
         'sqs',
         aws_access_key_id=credentials['AWS_ACCESS_KEY'],
-        aws_secret_access_key=credentials['AWS_SECRET']
+        aws_secret_access_key=credentials['AWS_SECRET'],
+        region_name='us-east-1'
     )
 
     while True:
-        config, receipt_handle = get_next_s3_key_from_sqs(sqs, credentials['SQS_TRAINING_CONFIG_QUEUE_URL'])
+        config, receipt_handle = get_next_config_from_sqs(sqs, credentials['SQS_TRAINING_CONFIG_QUEUE_URL'])
         if config is None:
             print('No more configs to process. Exiting...')
             break
