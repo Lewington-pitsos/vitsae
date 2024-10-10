@@ -13,7 +13,7 @@ def build_configs(output_filename=None):
         "n_feats": 65536,
         "batch_size": 16448 * 2,
         "k": 32,
-        "lr": 0.002,
+        "lr": 0.0008,
         "d_in": 1024,
         "seq_len": 257,
         "cache_buffer_size": 3,
