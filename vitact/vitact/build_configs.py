@@ -3,7 +3,7 @@ import json
 
 import boto3
 
-from utils import load_config
+from vitact.utils import load_config
 
 def build_configs(output_filename=None):
     baseline =        {

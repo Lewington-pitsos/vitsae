@@ -65,7 +65,13 @@ def create_subset_parquet(original_path, subset_path, max_urls=100000):
         print(f"An error occurred while creating subset parquet file: {err}")
         sys.exit(1)
 
-def main():
+def download_laion(
+    n_urls: int = 100_000,
+    processes_count: int = 16,
+    thread_count: int = 32,
+    image_size: int = 224,
+    base_dir='cruft'
+):
     # Load configuration
     config = load_config()
     hf_token = config.get('HF_TOKEN')
@@ -86,19 +92,19 @@ def main():
     part_number = '00000'  # Change this as needed
     
     # Define the local filename and path for the parquet file
-    parquet_filename = f"part-{part_number}.snappy.parquet"
+    parquet_filename = f"{base_dir}/part-{part_number}.snappy.parquet"
     parquet_path = os.path.abspath(parquet_filename)
     
     # Download the specified parquet file
     download_parquet(part_number, headers, parquet_path)
     
     # Create a subset parquet file with only the first 100,000 URLs
-    subset_parquet_filename = f"cruft/part-{part_number}_subset.snappy.parquet"
+    subset_parquet_filename = f"{base_dir}/part-{part_number}_subset.snappy.parquet"
     subset_parquet_path = os.path.abspath(subset_parquet_filename)
-    create_subset_parquet(parquet_path, subset_parquet_path, max_urls=600_000)
+    create_subset_parquet(parquet_path, subset_parquet_path, max_urls=n_urls)
     
     # Define the output directory for img2dataset
-    output_dir = os.path.abspath("cruft/bench")
+    output_dir = os.path.abspath(f"{base_dir}/bench")
     
     # Clear the output directory if it already exists
     if os.path.exists(output_dir):
@@ -112,10 +118,10 @@ def main():
     # Initiate img2dataset download process using the subset parquet file
     try:
         download(
-            processes_count=16,
-            thread_count=32,
+            processes_count=processes_count,
+            thread_count=thread_count,
             url_list=subset_parquet_path,          # Use the subset parquet file
-            image_size=224,
+            image_size=image_size,
             output_folder=output_dir,
             output_format="files",
             input_format="parquet",
@@ -131,4 +137,4 @@ def main():
         sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    download_laion()

@@ -1,7 +1,7 @@
 import json
 import boto3
 
-with open('.credentials.json') as f:
+with open('../vitsae/.credentials.json') as f:
     credentials = json.load(f)
 
 
@@ -31,4 +31,6 @@ def list_files_with_pattern(bucket, prefix, pattern):
                     print(key)
 
 # Call the function with the bucket name, prefix, and pattern
-list_files_with_pattern(bucket_name, prefix, '1000005504')
+list_files_with_pattern(bucket_name, prefix, '600023040')
+
+
