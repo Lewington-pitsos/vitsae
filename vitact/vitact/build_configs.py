@@ -7,13 +7,13 @@ from utils import load_config
 
 def build_configs(output_filename=None):
     baseline =        {
-        "wandb_project": "test-vit-sae-multilayer",
+        "wandb_project": "vit-sae-multilayer",
         "data_bucket": "sae-activations",
         "log_bucket": "sae-activations",
         "n_feats": 65536,
         "batch_size": 16448 * 2,
         "k": 32,
-        "lr": 0.0008,
+        "lr": 0.0001,
         "d_in": 1024,
         "seq_len": 257,
         "cache_buffer_size": 3,
@@ -26,13 +26,14 @@ def build_configs(output_filename=None):
         "save_every": 100_000_000,
         
         "save_checkpoints_to_s3": True,
+        "base_log_dir": "log",
     }
 
     all_configs = []
     for layer in ['11_resid', '14_resid', '17_resid', '20_resid', '22_resid', '2_resid', '5_resid', '8_resid']:
         clone = baseline.copy()
         clone['data_name'] = f"CLIP-ViT-L-14/{layer}"
-        clone['name'] = 'test-' + layer
+        clone['name'] = layer
 
         print()
         print('Config: ----------------------------------')
