@@ -51,12 +51,12 @@ def create_subset_parquet(original_path, subset_path, max_urls=100000):
         # Load the original parquet file
         df = pd.read_parquet(original_path)
         original_count = len(df)
-        print(f"Original parquet file contains {original_count} URLs.")
+        print(f"Original parquet file contains {original_count:,} URLs.")
         
         # Select the first `max_urls` rows
         subset_df = df.head(max_urls)
         subset_count = len(subset_df)
-        print(f"Subset parquet file will contain {subset_count} URLs.")
+        print(f"Subset parquet file will contain {subset_count:,} URLs.")
         
         # Save the subset to a new parquet file
         subset_df.to_parquet(subset_path, compression='snappy', index=False)
@@ -93,12 +93,12 @@ def main():
     download_parquet(part_number, headers, parquet_path)
     
     # Create a subset parquet file with only the first 100,000 URLs
-    subset_parquet_filename = f"part-{part_number}_subset.snappy.parquet"
+    subset_parquet_filename = f"cruft/part-{part_number}_subset.snappy.parquet"
     subset_parquet_path = os.path.abspath(subset_parquet_filename)
     create_subset_parquet(parquet_path, subset_parquet_path, max_urls=1_000_000)
     
     # Define the output directory for img2dataset
-    output_dir = os.path.abspath("bench")
+    output_dir = os.path.abspath("cruft/bench")
     
     # Clear the output directory if it already exists
     if os.path.exists(output_dir):
@@ -121,7 +121,7 @@ def main():
             input_format="parquet",
             url_col="URL",                         # Ensure this matches your parquet schema
             caption_col="TEXT",
-            enable_wandb=True,                     # Change to False if you don't use Weights & Biases
+            enable_wandb=False,                     # Change to False if you don't use Weights & Biases
             number_sample_per_shard=10000,
             distributor="multiprocessing",
         )

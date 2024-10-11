@@ -54,3 +54,5 @@ devbox
 v
 
 **/wandb
+
+*.parquet

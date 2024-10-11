@@ -13,7 +13,7 @@ def build_configs(output_filename=None):
         "n_feats": 65536,
         "batch_size": 32896,
         "k": 32,
-        "lr": 0.0008,
+        "lr": 0.00005,
         "d_in": 1024,
         "seq_len": 257,
         "cache_buffer_size": 3,
@@ -23,7 +23,7 @@ def build_configs(output_filename=None):
         "n_experts": None,
 
         "n_tokens": 1_000_000_000,
-        "save_every": 100_000_000,
+        "save_every": 25_000_000,
         
         "save_checkpoints_to_s3": True,
         "base_log_dir": "log",
