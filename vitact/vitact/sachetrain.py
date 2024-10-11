@@ -15,7 +15,7 @@ def get_next_config_from_sqs(sqs, queue_url):
         response = sqs.receive_message(
             QueueUrl=queue_url,
             MaxNumberOfMessages=1,
-            WaitTimeSeconds=5,
+            WaitTimeSeconds=30,
             VisibilityTimeout=VISIBILITY_TIMEOUT
         )
         
