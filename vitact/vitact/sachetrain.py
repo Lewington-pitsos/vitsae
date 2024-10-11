@@ -75,7 +75,6 @@ def get_checkpoint_from_s3(s3, bucket, prefix):
     max_checkpoint = None
     max_n_tokens = 0
     for checkpoint in all_existing_checkpoints:
-        print(f'Existing checkpoint: {checkpoint}')
 
         # Extract the number of tokens from the checkpoint filename
         try:
@@ -125,8 +124,11 @@ def keep_training():
                     region_name='us-east-1'
                 ),
                 config['log_bucket'],
-                f"{config['base_log_dir']}.{config['data_name']}"
+                f"{config['base_log_dir']}/{config['data_name']}"
             )
+
+            if checkpoint is not None:
+                print(f'Found checkpoint {checkpoint} with {n_tokens} tokens')
 
             if checkpoint is not None and n_tokens >= config['n_tokens']:
                 print(f'Config {config} already trained up to {n_tokens} tokens. Skipping...')
