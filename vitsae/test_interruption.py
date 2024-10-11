@@ -37,7 +37,7 @@ def test_interruption_handler_init_default_interrupt_fn(mock_sqs_client):
     queue_url = "test_url"
     handler = InterruptionHandler(url, queue_url, mock_sqs_client)
 
-    assert handler.url == url
+    assert handler.message == url
     assert handler.queue_url == queue_url
     assert handler.sqs_client == mock_sqs_client
     assert handler.interrupt_fn == check_for_interruption

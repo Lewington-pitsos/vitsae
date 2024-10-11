@@ -7,15 +7,16 @@ def check_for_interruption():
     try:
         response = requests.get("http://169.254.169.254/latest/meta-data/spot/instance-action", timeout=1)
         if response.status_code == 200:
+            print("Instance is scheduled for interruption")
             return True
     except requests.exceptions.RequestException:
         pass
     return False
 
 class InterruptionHandler():
-    def __init__(self, url, queue_url, sqs_client, interrupt_fn=None) -> None:
+    def __init__(self, message, queue_url, sqs_client, interrupt_fn=None) -> None:
         self._stop = False
-        self.url = url
+        self.message = message
         self.queue_url = queue_url
         self.sqs_client = sqs_client
 
@@ -34,9 +35,9 @@ class InterruptionHandler():
             time.sleep(5)
 
     def add_pq_back(self):
-        if self.url is not None:
-            url = self.url
-            self.url = None
+        if self.message is not None:
+            url = self.message
+            self.message = None
 
             self.sqs_client.send_message(QueueUrl=self.queue_url, MessageBody=url)
         else:

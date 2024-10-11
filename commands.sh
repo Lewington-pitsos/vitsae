@@ -62,6 +62,19 @@ aws ecs describe-tasks \
     --query "tasks[].{TaskArn:taskArn, Status:lastStatus, DesiredStatus:desiredStatus}" \
     --output table
 
+
+
+aws ecs describe-tasks \
+    --cluster vit-sae-ecs-cluster \
+    --tasks $(aws ecs list-tasks \
+        --cluster vit-sae-ecs-cluster \
+        --service-name training-service \
+        --query "taskArns" \
+        --output text) \
+    --query "tasks[].{TaskArn:taskArn, Status:lastStatus, DesiredStatus:desiredStatus}" \
+    --output table
+
+
 aws logs filter-log-events --log-group-name /ecs/activations-service --limit 10 --query 'events[].message' --start-time $(( $(date +%s) - 300 ))000 
 
 
