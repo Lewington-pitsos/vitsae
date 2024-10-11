@@ -60,7 +60,7 @@ def get_checkpoint_from_s3(s3, bucket, prefix):
 
         for page in page_iterator:
             if 'Contents' in page:
-                all_existing_checkpoints.extend([obj['Key'] for obj in page['Contents']])
+                all_existing_checkpoints.extend([obj['Key'] for obj in page['Contents'] if obj['Key'].endswith('.pt')])
             else:
                 # If there are no contents in the current page, continue to the next
                 continue
@@ -90,8 +90,6 @@ def get_checkpoint_from_s3(s3, bucket, prefix):
 
     max_checkpoint = f"s3://{bucket}/{max_checkpoint}" if max_checkpoint is not None else None
     return max_checkpoint, max_n_tokens
-
-
 
 def keep_training():
     credentials = load_config()
