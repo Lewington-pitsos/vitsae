@@ -15,7 +15,7 @@ def get_next_config_from_sqs(sqs, queue_url):
         response = sqs.receive_message(
             QueueUrl=queue_url,
             MaxNumberOfMessages=1,
-            WaitTimeSeconds=30,
+            WaitTimeSeconds=15,
             VisibilityTimeout=VISIBILITY_TIMEOUT
         )
         
@@ -88,6 +88,8 @@ def get_checkpoint_from_s3(s3, bucket, prefix):
             max_n_tokens = n_tokens
             max_checkpoint = checkpoint
 
+
+    max_checkpoint = f"s3://{bucket}/{max_checkpoint}" if max_checkpoint is not None else None
     return max_checkpoint, max_n_tokens
 
 
