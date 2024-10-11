@@ -3,13 +3,14 @@ from img2dataset import download
 import shutil
 import os
 import sys
+import pandas as pd  # Added pandas for parquet manipulation
 
 from utils import load_config
 
 def download_parquet(part_number, headers, save_path):
     """
     Downloads a specific parquet file from Hugging Face.
-    
+
     Args:
         part_number (str): The part number of the parquet file (e.g., '00000').
         headers (dict): The HTTP headers including authorization.
@@ -33,6 +34,35 @@ def download_parquet(part_number, headers, save_path):
         sys.exit(1)
     except Exception as err:
         print(f"An error occurred while downloading parquet file: {err}")
+        sys.exit(1)
+
+def create_subset_parquet(original_path, subset_path, max_urls=100000):
+    """
+    Creates a subset of the original parquet file containing only the first `max_urls` URLs.
+
+    Args:
+        original_path (str): Path to the original parquet file.
+        subset_path (str): Path where the subset parquet file will be saved.
+        max_urls (int): Maximum number of URLs to include in the subset.
+    """
+    print(f"Creating a subset parquet file with the first {max_urls} URLs...")
+    
+    try:
+        # Load the original parquet file
+        df = pd.read_parquet(original_path)
+        original_count = len(df)
+        print(f"Original parquet file contains {original_count} URLs.")
+        
+        # Select the first `max_urls` rows
+        subset_df = df.head(max_urls)
+        subset_count = len(subset_df)
+        print(f"Subset parquet file will contain {subset_count} URLs.")
+        
+        # Save the subset to a new parquet file
+        subset_df.to_parquet(subset_path, compression='snappy', index=False)
+        print(f"Successfully created subset parquet file at {subset_path}")
+    except Exception as err:
+        print(f"An error occurred while creating subset parquet file: {err}")
         sys.exit(1)
 
 def main():
@@ -62,6 +92,11 @@ def main():
     # Download the specified parquet file
     download_parquet(part_number, headers, parquet_path)
     
+    # Create a subset parquet file with only the first 100,000 URLs
+    subset_parquet_filename = f"part-{part_number}_subset.snappy.parquet"
+    subset_parquet_path = os.path.abspath(subset_parquet_filename)
+    create_subset_parquet(parquet_path, subset_parquet_path, max_urls=1_000_000)
+    
     # Define the output directory for img2dataset
     output_dir = os.path.abspath("bench")
     
@@ -74,20 +109,20 @@ def main():
             print(f"Error removing output directory: {err}")
             sys.exit(1)
     
-    # Initiate img2dataset download process
+    # Initiate img2dataset download process using the subset parquet file
     try:
         download(
             processes_count=16,
             thread_count=32,
-            url_list=parquet_path,          # Path to the downloaded parquet file
+            url_list=subset_parquet_path,          # Use the subset parquet file
             image_size=256,
             output_folder=output_dir,
             output_format="files",
             input_format="parquet",
-            url_col="URL",
+            url_col="URL",                         # Ensure this matches your parquet schema
             caption_col="TEXT",
-            enable_wandb=True,              # Change to False if you don't use Weights & Biases
-            number_sample_per_shard=1000,
+            enable_wandb=True,                     # Change to False if you don't use Weights & Biases
+            number_sample_per_shard=10000,
             distributor="multiprocessing",
         )
         print(f"Started img2dataset download. Images will be saved to {output_dir}")
