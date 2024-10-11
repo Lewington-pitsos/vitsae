@@ -1,10 +1,14 @@
 import json
-import traceback  # Import the traceback module
+import time
+import traceback
 import boto3
+import threading
 
 from sache import train_sae
 
 from vitact.utils import load_config
+
+VISIBILITY_TIMEOUT = 600 # 10 mins
 
 def get_next_config_from_sqs(sqs, queue_url):
     try:
@@ -12,7 +16,7 @@ def get_next_config_from_sqs(sqs, queue_url):
             QueueUrl=queue_url,
             MaxNumberOfMessages=1,
             WaitTimeSeconds=5,
-            VisibilityTimeout=60*60*10
+            VisibilityTimeout=VISIBILITY_TIMEOUT
         )
         
         messages = response.get('Messages', [])
@@ -38,28 +42,32 @@ def delete_message_from_sqs(sqs, queue_url, receipt_handle):
     except Exception as e:
         print(f'Error deleting message from SQS: {e}')
 
+def keep_extending_invisibility(sqs, queue_url, receipt_handle, stop_event):
+    while not stop_event.is_set():
+        sqs.change_message_visibility(
+            QueueUrl=queue_url,
+            ReceiptHandle=receipt_handle,
+            VisibilityTimeout=VISIBILITY_TIMEOUT
+        )
+        print(f'Extended visibility timeout')
+        time.sleep(60)
+
 def get_checkpoint_from_s3(s3, bucket, prefix):
     all_existing_checkpoints = []
     try:
-        response = s3.list_objects_v2(
-            Bucket=bucket,
-            Prefix=prefix
-        )
+        paginator = s3.get_paginator('list_objects_v2')
+        page_iterator = paginator.paginate(Bucket=bucket, Prefix=prefix)
 
-        if 'Contents' in response:
-            keys = [obj['Key'] for obj in response['Contents']]
+        for page in page_iterator:
+            if 'Contents' in page:
+                all_existing_checkpoints.extend([obj['Key'] for obj in page['Contents']])
+            else:
+                # If there are no contents in the current page, continue to the next
+                continue
 
-            for key in keys:
-                response = s3.list_objects_v2(
-                    Bucket=bucket,
-                    Prefix=key
-                )
-
-                if 'Contents' in response:
-                    all_existing_checkpoints.extend([obj['Key'] for obj in response['Contents']])
-
-        else:
+        if not all_existing_checkpoints:
             return None, 0
+
     except Exception as e:
         print(f'Error fetching checkpoint from S3: {e}')
         return None, 0
@@ -69,12 +77,19 @@ def get_checkpoint_from_s3(s3, bucket, prefix):
     for checkpoint in all_existing_checkpoints:
         print(f'Existing checkpoint: {checkpoint}')
 
-        n_tokens = int(checkpoint.split('/')[-1].split('.')[0])
+        # Extract the number of tokens from the checkpoint filename
+        try:
+            n_tokens = int(checkpoint.split('/')[-1].split('.')[0])
+        except ValueError:
+            print(f"Could not extract n_tokens from checkpoint: {checkpoint}")
+            continue
+
         if n_tokens > max_n_tokens:
             max_n_tokens = n_tokens
             max_checkpoint = checkpoint
 
     return max_checkpoint, max_n_tokens
+
 
 
 def keep_training():
@@ -93,6 +108,10 @@ def keep_training():
             print('No more configs to process. Exiting...')
             break
 
+        stop_event = threading.Event()
+        t = threading.Thread(target=keep_extending_invisibility, args=(sqs, credentials['SQS_TRAINING_CONFIG_QUEUE_URL'], receipt_handle, stop_event))
+        t.start()
+
         try:
             print(f'Running with config: {config}')
 
@@ -107,7 +126,7 @@ def keep_training():
                 f"{config['base_log_dir']}.{config['data_name']}"
             )
 
-            if checkpoint is not None and n_tokens > config['n_tokens']:
+            if checkpoint is not None and n_tokens >= config['n_tokens']:
                 print(f'Config {config} already trained up to {n_tokens} tokens. Skipping...')
                 delete_message_from_sqs(sqs, credentials['SQS_TRAINING_CONFIG_QUEUE_URL'], receipt_handle)
             else:
@@ -116,6 +135,9 @@ def keep_training():
         except Exception as e:
             print(f'Error running config {config}: {e}')
             traceback.print_exc()
+        finally:
+            stop_event.set()
+            t.join()
 
 
         print('\nProceeding to the next config ----->\n')
