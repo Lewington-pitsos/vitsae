@@ -95,7 +95,7 @@ def main():
     # Create a subset parquet file with only the first 100,000 URLs
     subset_parquet_filename = f"cruft/part-{part_number}_subset.snappy.parquet"
     subset_parquet_path = os.path.abspath(subset_parquet_filename)
-    create_subset_parquet(parquet_path, subset_parquet_path, max_urls=1_000_000)
+    create_subset_parquet(parquet_path, subset_parquet_path, max_urls=600_000)
     
     # Define the output directory for img2dataset
     output_dir = os.path.abspath("cruft/bench")
@@ -115,7 +115,7 @@ def main():
             processes_count=16,
             thread_count=32,
             url_list=subset_parquet_path,          # Use the subset parquet file
-            image_size=256,
+            image_size=224,
             output_folder=output_dir,
             output_format="files",
             input_format="parquet",
