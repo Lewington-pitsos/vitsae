@@ -63,7 +63,6 @@ aws ecs describe-tasks \
     --output table
 
 
-
 aws ecs describe-tasks \
     --cluster vit-sae-ecs-cluster \
     --tasks $(aws ecs list-tasks \
@@ -75,7 +74,7 @@ aws ecs describe-tasks \
     --output table
 
 
-aws logs filter-log-events --log-group-name /ecs/activations-service --limit 10 --query 'events[].message' --start-time $(( $(date +%s) - 300 ))000 
+aws logs filter-log-events --log-group-name /ecs/activations-service --limit 10 --query 'events[].message' --start-time $(( $(date +%s) - 300 ))000 --filter-pattern "CUDA"
 
 
 docker build -f Dockerfile.training -t train-localtest .

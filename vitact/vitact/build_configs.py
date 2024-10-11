@@ -3,17 +3,17 @@ import json
 
 import boto3
 
-from utils import load_config
+from vitact.utils import load_config
 
 def build_configs(output_filename=None):
     baseline =        {
-        "wandb_project": "vit-sae-multilayer",
+        "wandb_project": "test-vit-sae-multilayer",
         "data_bucket": "sae-activations",
         "log_bucket": "sae-activations",
         "n_feats": 65536,
-        "batch_size": 16448 * 2,
+        "batch_size": 32896,
         "k": 32,
-        "lr": 0.00005,
+        "lr": 0.0008,
         "d_in": 1024,
         "seq_len": 257,
         "cache_buffer_size": 3,
@@ -23,17 +23,18 @@ def build_configs(output_filename=None):
         "n_experts": None,
 
         "n_tokens": 1_000_000_000,
-        "save_every": 25_000_000,
+        "save_every": 100_000_000,
         
         "save_checkpoints_to_s3": True,
         "base_log_dir": "log",
     }
 
+
     all_configs = []
-    for layer in ['11_resid', '14_resid', '17_resid', '20_resid', '22_resid', '2_resid', '5_resid', '8_resid']:
+    for layer in ['11_resid', '22_resid']:
         clone = baseline.copy()
         clone['data_name'] = f"CLIP-ViT-L-14/{layer}"
-        clone['name'] = layer
+        clone['name'] = 'test-' + layer
 
         print()
         print('Config: ----------------------------------')
