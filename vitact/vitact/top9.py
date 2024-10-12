@@ -64,8 +64,6 @@ def generate_latents(
         sae = torch.load(sae_path, map_location=device)
         sae_dict[location] = sae
 
-    n_steps = [sae_path.split('/')[-1].split('.')[0] for sae_path in sae_paths.values()]
-
     if not os.path.exists(image_dir):
         os.makedirs(image_dir)
 
