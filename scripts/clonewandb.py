@@ -11,10 +11,12 @@ def copy_wandb_runs(
     target_entity,
     target_project,
     api_key=None,
-    copy_artifacts=True
+    copy_artifacts=True,
+    max_step=None
 ):
     """
-    Copies all runs from the source wandb project to the target project.
+    Copies all runs from the source wandb project to the target project,
+    stopping data copying at a specified step for each run.
 
     :param source_entity: The wandb entity (user or team) of the source project.
     :param source_project: Name of the source wandb project.
@@ -22,6 +24,7 @@ def copy_wandb_runs(
     :param target_project: Name of the target wandb project.
     :param api_key: (Optional) Your wandb API key. If not provided, it will use the default authentication.
     :param copy_artifacts: Whether to copy artifacts. Defaults to True.
+    :param max_step: (Optional) Maximum step up to which data should be copied for each run.
     """
     # Authenticate with wandb
     if api_key:
@@ -42,8 +45,10 @@ def copy_wandb_runs(
         # If target project does not exist, create it
         print(f"Target project '{target_entity}/{target_project}' does not exist. Creating it...")
         try:
-            target_proj = api.create_project(target_entity, target_project)
-            print(f"Created target project '{target_entity}/{target_project}'.")
+            # Note: The wandb API does not support creating projects directly.
+            # You may need to create the target project manually via the wandb UI.
+            print(f"Please create the target project '{target_project}' in entity '{target_entity}' via the wandb UI.")
+            return
         except Exception as e:
             print(f"Failed to create target project: {e}")
             return
@@ -72,18 +77,27 @@ def copy_wandb_runs(
             # Log tags
             tags = run.tags
             if tags:
-                for tag in tags:
-                    wandb.run.tags.add(tag)
+                wandb.run.tags = tags  # Replace tags with the source run's tags
 
-            # Log metrics
+            # Log metrics up to max_step
             history = run.history(pandas=False)
             for entry in history:
-                for key, value in entry.items():
-                    if key not in ['_step', '_runtime']:
-                        wandb.log({key: value}, step=entry.get('_step', None))
+                step = entry.get('_step', None)
+                if step is not None:
+                    if max_step is not None and step > max_step:
+                        break  # Stop copying data after max_step
+                else:
+                    # If '_step' is missing, we cannot proceed reliably
+                    print(f"Warning: '_step' missing in run history entry. Skipping entry.")
+                    continue
+
+                # Prepare the data to log, excluding system keys
+                log_data = {k: v for k, v in entry.items() if not k.startswith('_') and k != 'epoch'}
+                if log_data:
+                    wandb.log(log_data, step=step)
 
             # Handle artifacts
-            if copy_artifacts and run.logged_artifacts:
+            if copy_artifacts and run.logged_artifacts():
                 for artifact in run.logged_artifacts():
                     print(f"  Copying artifact: {artifact.name} (type: {artifact.type})")
                     # Download the artifact
@@ -106,5 +120,6 @@ if __name__ == "__main__":
         target_entity='lewington',
         target_project='CLIP-ViT-L-14-sae',
         api_key=os.getenv("WANDB_API_KEY"),
-        copy_artifacts=False
+        copy_artifacts=False,
+        max_step=24_897
     )

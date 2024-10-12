@@ -87,7 +87,7 @@ def generate_latents(
                 layer, hook_name = location
                 sae = sae_dict[location]
                 activation = activations[location]
-                activation = activation[:, 0]
+                activation = activation[:, 1]
 
                 latent = sae.forward_descriptive(activation)['latent']
                 latent = latent.detach()
@@ -222,11 +222,11 @@ dataloader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=3)
 
 generate_latents(
     sae_paths=sae_paths,
-    n_activations=400_000,
+    n_activations=40_000,
     dataloader=dataloader,
     batch_size=batch_size,
     num_top=9,  # Number of top activations to keep
     device='cuda',
     image_dir='cruft/top9',
-    n_features=4096  # Specify the number of features you want to process
+    n_features=1024  # Specify the number of features you want to process
 )
