@@ -56,3 +56,5 @@ v
 **/wandb
 
 *.parquet
+
+vitact/mlruns

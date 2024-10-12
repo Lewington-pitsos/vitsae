@@ -70,7 +70,8 @@ def download_laion(
     processes_count: int = 16,
     thread_count: int = 32,
     image_size: int = 224,
-    base_dir='cruft'
+    base_dir='cruft',
+    output_dir='cruft/bench',
 ):
     # Load configuration
     config = load_config()
@@ -102,9 +103,6 @@ def download_laion(
     subset_parquet_filename = f"{base_dir}/part-{part_number}_subset.snappy.parquet"
     subset_parquet_path = os.path.abspath(subset_parquet_filename)
     create_subset_parquet(parquet_path, subset_parquet_path, max_urls=n_urls)
-    
-    # Define the output directory for img2dataset
-    output_dir = os.path.abspath(f"{base_dir}/bench")
     
     # Clear the output directory if it already exists
     if os.path.exists(output_dir):
