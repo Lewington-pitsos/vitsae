@@ -1,4 +1,5 @@
 import boto3
+from click import File
 import datasets
 from torch.utils.data import DataLoader
 import torch
@@ -14,7 +15,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath('.'))))
 
 from sache import SpecifiedHookedViT
 from vitact.tardataset import StreamingTensorDataset 
-
+from vitact.filedataset import FileDataset
 
 transform = transforms.Compose([
     transforms.ToTensor(),  # Convert PIL image to a tensor
@@ -193,32 +194,28 @@ def generate_latents(
 
             print(f'Saved images for feature {feature_idx} in layer {layer}')
 
-# Example usage:
-
-# Define the SAE checkpoints to download
 sae_checkpoints = [
     's3://sae-activations/log/CLIP-ViT-L-14/11_resid/11_resid_6705c9/600023040.pt',
-    's3://sae-activations/log/CLIP-ViT-L-14/14_resid/14_resid_6d8202/600023040.pt',
-    's3://sae-activations/log/CLIP-ViT-L-14/17_resid/17_resid_e0766f/600023040.pt',
-    's3://sae-activations/log/CLIP-ViT-L-14/20_resid/20_resid_5998fd/600023040.pt',
-    's3://sae-activations/log/CLIP-ViT-L-14/22_resid/22_resid_8fa3ab/600023040.pt',
-    's3://sae-activations/log/CLIP-ViT-L-14/2_resid/2_resid_29c579/600023040.pt',
-    's3://sae-activations/log/CLIP-ViT-L-14/5_resid/5_resid_79d8c9/600023040.pt',
-    's3://sae-activations/log/CLIP-ViT-L-14/8_resid/8_resid_9a2c60/600023040.pt',
+    # 's3://sae-activations/log/CLIP-ViT-L-14/14_resid/14_resid_6d8202/600023040.pt',
+    # 's3://sae-activations/log/CLIP-ViT-L-14/17_resid/17_resid_e0766f/600023040.pt',
+    # 's3://sae-activations/log/CLIP-ViT-L-14/20_resid/20_resid_5998fd/600023040.pt',
+    # 's3://sae-activations/log/CLIP-ViT-L-14/22_resid/22_resid_8fa3ab/600023040.pt',
+    # 's3://sae-activations/log/CLIP-ViT-L-14/2_resid/2_resid_29c579/600023040.pt',
+    # 's3://sae-activations/log/CLIP-ViT-L-14/5_resid/5_resid_79d8c9/600023040.pt',
+    # 's3://sae-activations/log/CLIP-ViT-L-14/8_resid/8_resid_9a2c60/600023040.pt',
 ]
 
-# Download the SAEs
 sae_paths = download_sae_checkpoints(sae_checkpoints)
 
-# Load the dataset and dataloader
-ds = datasets.load_dataset("lmms-lab/GQA", 'train_all_images')['train']
+
+ds = FileDataset('cruft/bench')
 batch_size = 384
 dataloader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=3, collate_fn=collate_fn)
 
 # Generate latents and accumulate top-k activations for multiple layers
 generate_latents(
     sae_paths=sae_paths,
-    n_activations=20000,
+    n_activations=200,
     dataloader=dataloader,
     batch_size=batch_size,
     num_top=9,  # Number of top activations to keep
