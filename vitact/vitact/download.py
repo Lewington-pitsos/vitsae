@@ -136,5 +136,7 @@ def download_laion(
         print(f"Error during img2dataset download: {err}")
         sys.exit(1)
 
+    return output_dir
+
 if __name__ == "__main__":
     download_laion()

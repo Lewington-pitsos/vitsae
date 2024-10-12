@@ -1,11 +1,8 @@
 import boto3
-from click import File
-import datasets
 from torch.utils.data import DataLoader
 import torch
 import os
 import json
-from torchvision import transforms
 from tqdm import tqdm
 from PIL import Image
 import matplotlib.pyplot as plt
@@ -15,30 +12,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath('.'))))
 
 from sache import SpecifiedHookedViT
 from vitact.tardataset import StreamingTensorDataset 
-from vitact.filedataset import FileDataset
+from vitact.filedataset import FilePathDataset
+from vitact.download import download_laion
 
-transform = transforms.Compose([
-    transforms.ToTensor(),  # Convert PIL image to a tensor
-])
-
-def collate_fn(batch):
-    images = []
-    ids = []
-    for item in batch:
-        ids.append(item['id'])
-        img = item['image']
-        # if image is black and white, convert to RGB
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-
-        img = img.resize((224, 224))
-        images.append(transform(img))
-    images = torch.stack(images)  # Stack images into a single tensor
-    
-    return ids, images
-
-def download_sae_checkpoints(sae_checkpoints):
-
+def download_sae_checkpoints(sae_checkpoints, base_dir='cruft'):
+    if not os.path.exists(base_dir):
+        os.makedirs(base_dir)
     s3_client = boto3.client(
         's3',
         aws_access_key_id=os.getenv('AWS_ACCESS_KEY'),
@@ -47,20 +26,21 @@ def download_sae_checkpoints(sae_checkpoints):
 
     local_files = {}
     for checkpoint in sae_checkpoints:
-
         layer = int(checkpoint.split('/')[-2].split('_')[0])
 
-        local_path = f'cruft/{"-".join(checkpoint.split("/")[-3:])}'
+        local_path = f'{base_dir}/{"-".join(checkpoint.split("/")[-3:])}'
 
         local_files[(layer, 'resid')] = local_path
 
-        print(f'Downloading {checkpoint} to {local_path}...')
+        if not os.path.exists(local_path):
 
-        s3_client.download_file(
-            checkpoint.split('/')[2],
-            '/'.join(checkpoint.split('/')[3:]),
-            local_path
-        )
+            print(f'Downloading {checkpoint} to {local_path}...')
+
+            s3_client.download_file(
+                checkpoint.split('/')[2],
+                '/'.join(checkpoint.split('/')[3:]),
+                local_path
+            )
     
     return local_files
 
@@ -73,6 +53,7 @@ def generate_latents(
         transformer_name='laion/CLIP-ViT-L-14-laion2B-s32B-b82K',
         hook_name="resid",
         device='cuda',
+        image_dir='cruft/top9'
     ):
 
     # Prepare locations and load SAEs
@@ -84,7 +65,6 @@ def generate_latents(
         sae_dict[location] = sae
 
     n_steps = [sae_path.split('/')[-1].split('.')[0] for sae_path in sae_paths.values()]
-    image_dir = "/".join(sae_paths[next(iter(sae_paths))].split('/')[:-1]) + f'/images-{"-".join(n_steps)}'
 
     if not os.path.exists(image_dir):
         os.makedirs(image_dir)
@@ -97,7 +77,6 @@ def generate_latents(
 
     with torch.no_grad():
         for i, (paths, batch) in tqdm(enumerate(dataloader), total=n_activations // batch_size):
-
             activations = transformer.all_activations(batch)
             batch_size = batch.size(0)
             current_indices = torch.arange(cumulative_index, cumulative_index + batch_size, dtype=torch.long, device=device)
@@ -138,7 +117,6 @@ def generate_latents(
             if i * batch_size >= n_activations:
                 break
 
-    # After processing all batches, create grids for each layer
     for location in locations:
         layer, hook_name = location
         num_features = num_features_dict[location]
@@ -205,19 +183,31 @@ sae_checkpoints = [
     # 's3://sae-activations/log/CLIP-ViT-L-14/8_resid/8_resid_9a2c60/600023040.pt',
 ]
 
-sae_paths = download_sae_checkpoints(sae_checkpoints)
+
+base_dir = 'cruft'
+
+# laion_img_dir = download_laion(
+#     n_urls=100_000,
+#     processes_count=16,
+#     thread_count=32,
+#     image_size=224,
+#     base_dir=base_dir
+# )
+laion_img_dir = 'cruft/bench'
+
+sae_paths = download_sae_checkpoints(sae_checkpoints, base_dir=base_dir)
 
 
-ds = FileDataset('cruft/bench')
+ds = FilePathDataset(laion_img_dir)
 batch_size = 384
-dataloader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=3, collate_fn=collate_fn)
+dataloader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=3)
 
-# Generate latents and accumulate top-k activations for multiple layers
 generate_latents(
     sae_paths=sae_paths,
     n_activations=200,
     dataloader=dataloader,
     batch_size=batch_size,
     num_top=9,  # Number of top activations to keep
-    device='cuda'
+    device='cuda',
+    image_dir='cruft/top9'
 )
