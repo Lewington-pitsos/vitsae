@@ -58,3 +58,4 @@ v
 *.parquet
 
 vitact/mlruns
+**/cruft

@@ -53,7 +53,8 @@ def generate_latents(
         hook_name="resid",
         device='cuda',
         image_dir='cruft/top9',
-        n_features=None  # New parameter
+        n_features=None,
+        sequence_idx=0
     ):
 
     # Prepare locations and load SAEs
@@ -86,7 +87,7 @@ def generate_latents(
                 layer, hook_name = location
                 sae = sae_dict[location]
                 activation = activations[location]
-                activation = activation[:, 1]
+                activation = activation[:, sequence_idx]
 
                 latent = sae.forward_descriptive(activation)['latent']
                 latent = latent.detach()
@@ -215,6 +216,8 @@ if __name__ == '__main__':
             base_dir=base_dir,
             output_dir=laion_img_dir
         )
+    else:
+        print(f"Skipping download of images to {laion_img_dir} as the directory already exists.")
 
     sae_paths = download_sae_checkpoints(sae_checkpoints, base_dir=base_dir)
 
@@ -230,5 +233,6 @@ if __name__ == '__main__':
         num_top=9,  # Number of top activations to keep
         device='cuda',
         image_dir='cruft/top9',
-        n_features=1024  # Specify the number of features you want to process
+        n_features=1024, # Specify the number of features you want to process
+        sequence_idx=128
     )

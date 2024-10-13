@@ -5,7 +5,7 @@ import os
 import sys
 import pandas as pd  # Added pandas for parquet manipulation
 
-from utils import load_config
+from vitact.utils import load_config
 
 def download_parquet(part_number, headers, save_path):
     """
