@@ -1,0 +1,17 @@
+Symptom: for all images, layer 2 activates the exact same neurons every time. 
+DONE
+- start server devbox
+- put random static in, see what comes out for layer 2 and layer 20
+- do analysis on one that is more in the middle
+
+
+TODO NOW
+- understand what preprocessing does 
+    - hypothesis: it subtracts 0.5 and divides by 0.5 (what the actual fuck)
+- put an image in, see what comes out for both layers
+- see what "read image" does
+
+
+
+TODO GENERAL
+- check what exact format the tensors coming out of streaming tensor dataset come out in
