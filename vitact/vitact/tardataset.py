@@ -76,7 +76,7 @@ class StreamingDataset(IterableDataset):
             # Brief pause before checking for new tar files
             time.sleep(0.3)
 
-class StreamingTensorDataset(StreamingDataset):
+class StreamingPILDataset(StreamingDataset):
     def __init__(self, data_dir):
         super().__init__(data_dir)
         self.transform = transforms.ToTensor()
@@ -88,9 +88,7 @@ class StreamingTensorDataset(StreamingDataset):
 
             if 'jpg' in sample:
                 try:
-                    image = Image.open(io.BytesIO(sample['jpg'])).convert('RGB')
-                    image = image.resize((224, 224))
-                    image_tensor = self.transform(image)
-                    yield image_tensor
+                    image = Image.open(io.BytesIO(sample['jpg']))
+                    yield image
                 except Exception as e:
                     print(f'Error processing image: {e}')

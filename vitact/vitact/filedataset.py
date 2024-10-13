@@ -1,8 +1,11 @@
+import io
 import os
 import hashlib
 import torch
 from torch.utils.data import IterableDataset
 from torchvision.io import read_image, ImageReadMode
+from PIL import Image
+import torchvision.transforms as transforms
 
 class FileDataset(IterableDataset):
     def __init__(self, root_dir):
@@ -45,3 +48,16 @@ class FileDataset(IterableDataset):
 class FilePathDataset(FileDataset):
     def _get_image_data(self, image_path):
         return image_path, read_image(image_path, mode=ImageReadMode.RGB)
+
+class FloatFilePathDataset(FileDataset):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.transform = transforms.ToTensor()
+
+    def _get_image_data(self, image_path):
+        with open(image_path, 'rb') as f:
+            image = Image.open(io.BytesIO(f.read())).convert('RGB')
+            image = image.resize((224, 224))
+            image_tensor = self.transform(image)
+
+        return image_path, image_tensor

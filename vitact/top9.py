@@ -8,10 +8,8 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import sys
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath('.'))))
-
 from sache import SpecifiedHookedViT
-from vitact.filedataset import FilePathDataset
+from vitact.filedataset import FilePathDataset, FloatFilePathDataset
 from vitact.download import download_laion
 
 def download_sae_checkpoints(sae_checkpoints, base_dir='cruft'):
@@ -205,6 +203,10 @@ if __name__ == '__main__':
         raise ValueError(f"Output directory {image_dir} already exists. Please remove it before running this script.")
 
     base_dir = 'cruft'
+
+    if not os.path.exists(base_dir):
+        os.makedirs(base_dir)
+
     laion_img_dir = 'cruft/bench'
 
     if not os.path.exists(laion_img_dir):
@@ -221,7 +223,8 @@ if __name__ == '__main__':
 
     sae_paths = download_sae_checkpoints(sae_checkpoints, base_dir=base_dir)
 
-    ds = FilePathDataset(laion_img_dir)
+    # ds = FilePathDataset(laion_img_dir)
+    ds = FloatFilePathDataset(laion_img_dir)
     batch_size = 384
     dataloader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=3)
 
@@ -234,5 +237,5 @@ if __name__ == '__main__':
         device='cuda',
         image_dir='cruft/top9',
         n_features=1024, # Specify the number of features you want to process
-        sequence_idx=128
+        sequence_idx=0
     )

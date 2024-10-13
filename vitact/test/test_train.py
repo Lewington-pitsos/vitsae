@@ -18,22 +18,22 @@ def s3_setup():
 
 def test_get_highest_checkpoint(s3_setup):
     # Add mock checkpoints to the S3 bucket
-    s3_setup.put_object(Bucket=mock_bucket, Key='log/CLIP-ViT-L-14/17_resid/a/100.pth', Body=b'')
-    s3_setup.put_object(Bucket=mock_bucket, Key='log/CLIP-ViT-L-14/17_resid/a/200.pth', Body=b'')
-    s3_setup.put_object(Bucket=mock_bucket, Key='log/CLIP-ViT-L-14/17_resid/b/150.pth', Body=b'')
+    s3_setup.put_object(Bucket=mock_bucket, Key='log/CLIP-ViT-L-14/17_resid/a/100.pt', Body=b'')
+    s3_setup.put_object(Bucket=mock_bucket, Key='log/CLIP-ViT-L-14/17_resid/a/200.pt', Body=b'')
+    s3_setup.put_object(Bucket=mock_bucket, Key='log/CLIP-ViT-L-14/17_resid/b/150.pt', Body=b'')
 
     # Test that the function returns the highest checkpoint based on n_tokens.
     checkpoint, n_tokens = get_checkpoint_from_s3(s3_setup, mock_bucket, mock_prefix)
-    assert checkpoint == 's3://sae-activations/log/CLIP-ViT-L-14/17_resid/a/200.pth'
+    assert checkpoint == 's3://sae-activations/log/CLIP-ViT-L-14/17_resid/a/200.pt'
     assert n_tokens == 200
 
 def test_reads_files_correctly(s3_setup):
     # Add a mock checkpoint to the S3 bucket
-    s3_setup.put_object(Bucket=mock_bucket, Key='log/CLIP-ViT-L-14/17_resid/a/100.pth', Body=b'')
+    s3_setup.put_object(Bucket=mock_bucket, Key='log/CLIP-ViT-L-14/17_resid/a/100.pt', Body=b'')
 
     # Test that the function reads files correctly from the S3 bucket.
     checkpoint, n_tokens = get_checkpoint_from_s3(s3_setup, mock_bucket, mock_prefix)
-    assert checkpoint == 's3://sae-activations/log/CLIP-ViT-L-14/17_resid/a/100.pth'
+    assert checkpoint == 's3://sae-activations/log/CLIP-ViT-L-14/17_resid/a/100.pt'
     assert isinstance(n_tokens, int)
     assert n_tokens == 100
 

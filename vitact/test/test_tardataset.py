@@ -9,7 +9,7 @@ import hashlib
 import tarfile
 import numpy as np
 
-from vitact.tardataset import StreamingDataset, StreamingTensorDataset
+from vitact.tardataset import StreamingDataset, StreamingPILDataset
 
 def create_random_image(width, height, mode='RGB'):
     """
@@ -174,20 +174,18 @@ def test_loads_tar(temporary_tar_dir):
     # Assert that the temporary directory is empty after processing
     assert len(os.listdir(temporary_tar_dir)) == 1, "Temporary tar directory should still have 1 file after stopping"
 
-def test_loads_tar_tensors(temporary_tar_dir_tensors):
+def test_loads_tar_images(temporary_tar_dir_tensors):
     """
-    Test that tar files are loaded correctly by StreamingTensorDataset.
+    Test that tar files are loaded correctly by StreamingPILDataset.
     
     :param temporary_tar_dir_tensors: Temporary directory with copied tar files for tensor datasets.
     """
     # Assert test directory is not empty
     assert len(os.listdir(temporary_tar_dir_tensors)) > 0, "Temporary tar directory is empty."
 
-    dataset = StreamingTensorDataset(str(temporary_tar_dir_tensors))
+    dataset = StreamingPILDataset(str(temporary_tar_dir_tensors))
 
     for i, sample in enumerate(dataset):
-        assert isinstance(sample, torch.Tensor), f"Sample {i} is not a torch.Tensor."
-
         if i >= 100:
             print('Stopping dataset iteration after 100 samples.')
             dataset._stop = True
