@@ -11,7 +11,6 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath('.'))))
 
 from sache import SpecifiedHookedViT
-from vitact.tardataset import StreamingTensorDataset 
 from vitact.filedataset import FilePathDataset
 from vitact.download import download_laion
 
@@ -185,48 +184,51 @@ def generate_latents(
 
             print(f'Saved images for feature {feature_idx} in layer {layer}')
 
-sae_checkpoints = [
-    's3://sae-activations/log/CLIP-ViT-L-14/11_resid/11_resid_6705c9/600023040.pt',
-    's3://sae-activations/log/CLIP-ViT-L-14/14_resid/14_resid_6d8202/600023040.pt',
-    's3://sae-activations/log/CLIP-ViT-L-14/17_resid/17_resid_e0766f/600023040.pt',
-    's3://sae-activations/log/CLIP-ViT-L-14/20_resid/20_resid_5998fd/600023040.pt',
-    's3://sae-activations/log/CLIP-ViT-L-14/22_resid/22_resid_8fa3ab/600023040.pt',
-    's3://sae-activations/log/CLIP-ViT-L-14/2_resid/2_resid_29c579/600023040.pt',
-    's3://sae-activations/log/CLIP-ViT-L-14/5_resid/5_resid_79d8c9/600023040.pt',
-    's3://sae-activations/log/CLIP-ViT-L-14/8_resid/8_resid_9a2c60/600023040.pt',
-]
 
-image_dir = 'cruft/top9'
+if __name__ == '__main__':
 
-if os.path.exists(image_dir):
-    raise ValueError(f"Output directory {image_dir} already exists. Please remove it before running this script.")
+    sae_checkpoints = [
+        's3://sae-activations/log/CLIP-ViT-L-14/11_resid/11_resid_6705c9/600023040.pt',
+        's3://sae-activations/log/CLIP-ViT-L-14/14_resid/14_resid_6d8202/600023040.pt',
+        's3://sae-activations/log/CLIP-ViT-L-14/17_resid/17_resid_e0766f/600023040.pt',
+        's3://sae-activations/log/CLIP-ViT-L-14/20_resid/20_resid_5998fd/600023040.pt',
+        's3://sae-activations/log/CLIP-ViT-L-14/22_resid/22_resid_8fa3ab/600023040.pt',
+        's3://sae-activations/log/CLIP-ViT-L-14/2_resid/2_resid_29c579/600023040.pt',
+        's3://sae-activations/log/CLIP-ViT-L-14/5_resid/5_resid_79d8c9/600023040.pt',
+        's3://sae-activations/log/CLIP-ViT-L-14/8_resid/8_resid_9a2c60/600023040.pt',
+    ]
 
-base_dir = 'cruft'
-laion_img_dir = 'cruft/bench'
+    image_dir = 'cruft/top9'
 
-if not os.path.exists(laion_img_dir):
-    download_laion(
-        n_urls=100_000,
-        processes_count=16,
-        thread_count=32,
-        image_size=224,
-        base_dir=base_dir,
-        output_dir=laion_img_dir
+    if os.path.exists(image_dir):
+        raise ValueError(f"Output directory {image_dir} already exists. Please remove it before running this script.")
+
+    base_dir = 'cruft'
+    laion_img_dir = 'cruft/bench'
+
+    if not os.path.exists(laion_img_dir):
+        download_laion(
+            n_urls=100_000,
+            processes_count=16,
+            thread_count=32,
+            image_size=224,
+            base_dir=base_dir,
+            output_dir=laion_img_dir
+        )
+
+    sae_paths = download_sae_checkpoints(sae_checkpoints, base_dir=base_dir)
+
+    ds = FilePathDataset(laion_img_dir)
+    batch_size = 384
+    dataloader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=3)
+
+    generate_latents(
+        sae_paths=sae_paths,
+        n_activations=40_000,
+        dataloader=dataloader,
+        batch_size=batch_size,
+        num_top=9,  # Number of top activations to keep
+        device='cuda',
+        image_dir='cruft/top9',
+        n_features=1024  # Specify the number of features you want to process
     )
-
-sae_paths = download_sae_checkpoints(sae_checkpoints, base_dir=base_dir)
-
-ds = FilePathDataset(laion_img_dir)
-batch_size = 384
-dataloader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=3)
-
-generate_latents(
-    sae_paths=sae_paths,
-    n_activations=40_000,
-    dataloader=dataloader,
-    batch_size=batch_size,
-    num_top=9,  # Number of top activations to keep
-    device='cuda',
-    image_dir='cruft/top9',
-    n_features=1024  # Specify the number of features you want to process
-)

@@ -31,10 +31,10 @@ def build_configs(output_filename=None):
 
 
     all_configs = []
-    for layer in ['11_resid', '22_resid']:
+    for location in ['11_resid', '22_resid']:
         clone = baseline.copy()
-        clone['data_name'] = f"CLIP-ViT-L-14/{layer}"
-        clone['name'] = 'test-' + layer
+        clone['data_name'] = f"CLIP-ViT-L-14/{location}"
+        clone['name'] = 'test-' + location
 
         print()
         print('Config: ----------------------------------')
