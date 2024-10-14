@@ -1,17 +1,18 @@
+import time
 from sache import vit_generate
 import fire
 import sys
 import os
 
-
 import randomname
 from torch.utils.data import DataLoader
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from vitact.tardataset import StreamingTensorDataset
+from vitact.tardataset import StreamingPILDataset
 from utils import load_config
 from pull import keep_pulling
 from threading import Thread, Event
+import traceback
 
 def generate_activations(
         run_name=None, 
@@ -27,9 +28,6 @@ def generate_activations(
         num_data_workers=3
     ):
 
-
-    # start the pulling in another thread
-
     tar_dir = 'cruft/tars'
     stop_event = Event()
     pull_thread = Thread(target=keep_pulling, args=(tar_dir, stop_event))
@@ -39,9 +37,10 @@ def generate_activations(
         run_name = randomname.generate('adj/', 'n/')
     print('run_name:', run_name)
 
-    dataset = StreamingTensorDataset(tar_dir)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_data_workers)
+    dataset = StreamingPILDataset(tar_dir)
 
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_data_workers, collate_fn=lambda x: x)
+    
     hook_locations = [
         (2, 'resid'),
         (5, 'resid'),
@@ -60,7 +59,6 @@ def generate_activations(
     config = load_config()
     config['AWS_ACCESS_KEY_ID'] = config['AWS_ACCESS_KEY']
     try:
-        pass
         vit_generate(
             config,
             run_name,
@@ -80,7 +78,9 @@ def generate_activations(
             print_logs=True
         )
     except Exception as e:
-        print(e)
+        traceback.print_exc()
+
+        print('exception generating', e)
     finally:
         dataset.stop()
         stop_event.set()

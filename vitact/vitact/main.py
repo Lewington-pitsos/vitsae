@@ -3,7 +3,7 @@ import os
 from generate import generate_activations
 
 if __name__ == '__main__':
-    run_name = 'CLIP-ViT-L-14'
+    run_name = 'CLIP-ViT-L-14-laion2B-s32B-b82K'
     if os.environ.get("RUN_NAME"):
         run_name = os.environ.get("RUN_NAME")
 

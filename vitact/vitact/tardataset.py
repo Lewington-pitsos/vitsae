@@ -73,11 +73,15 @@ class StreamingDataset(IterableDataset):
             # Brief pause before checking for new tar files
             time.sleep(0.3)
 
-class StreamingTensorDataset(StreamingDataset):
+class StreamingPILDataset(StreamingDataset):
     def __init__(self, data_dir):
         super().__init__(data_dir)
-        self.transform = transforms.ToTensor()
 
+        self.transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+        ])
+    
     def __iter__(self):
         for sample in super().__iter__():
             if self._stop:
@@ -85,8 +89,17 @@ class StreamingTensorDataset(StreamingDataset):
 
             if 'jpg' in sample:
                 try:
-                    pil_img = Image.open(io.BytesIO(sample['jpg']))
-                    yield (self.transform(pil_img) * 255).to(torch.uint8)
+                    with Image.open(io.BytesIO(sample['jpg'])) as pil_img:
+                        pil_img.load()
+                        yield pil_img
+
+                    # bytes_tensor = torch.frombuffer(sample['jpg'], dtype=torch.uint8)
+
+                    # yield self.transform(decode_jpeg(bytes_tensor, mode=ImageReadMode.RGB)
+
+                    # with Image.open(io.BytesIO(sample['jpg'])) as pil_img:
+                    #     pil_img = pil_img.convert('RGB')
+                    #     yield (self.transform(pil_img) * 255).to(torch.uint8)
                 except Exception as e:
                     error_message = str(e)
                     if len(error_message) > 1000:
