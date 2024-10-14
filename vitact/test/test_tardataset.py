@@ -9,7 +9,7 @@ import hashlib
 import tarfile
 import numpy as np
 
-from vitact.tardataset import StreamingDataset, StreamingPILDataset
+from vitact.tardataset import StreamingDataset, StreamingTensorDataset
 
 def create_random_image(width, height, mode='RGB'):
     """
@@ -174,7 +174,7 @@ def test_loads_tar(temporary_tar_dir):
     # Assert that the temporary directory is empty after processing
     assert len(os.listdir(temporary_tar_dir)) == 1, "Temporary tar directory should still have 1 file after stopping"
 
-def test_loads_tar_images(temporary_tar_dir_tensors):
+def test_loads_tar_tensors(temporary_tar_dir_tensors):
     """
     Test that tar files are loaded correctly by StreamingPILDataset.
     
@@ -183,11 +183,12 @@ def test_loads_tar_images(temporary_tar_dir_tensors):
     # Assert test directory is not empty
     assert len(os.listdir(temporary_tar_dir_tensors)) > 0, "Temporary tar directory is empty."
 
-    dataset = StreamingPILDataset(str(temporary_tar_dir_tensors))
+    dataset = StreamingTensorDataset(str(temporary_tar_dir_tensors))
 
     for i, sample in enumerate(dataset):
+        assert isinstance(sample, torch.Tensor), "Sample is not a torch.Tensor."
+
         if i >= 100:
-            print('Stopping dataset iteration after 100 samples.')
             dataset._stop = True
             break
 
@@ -195,6 +196,64 @@ def test_loads_tar_images(temporary_tar_dir_tensors):
     assert len(os.listdir(temporary_tar_dir_tensors)) == 1, (
         f"Expected 1 tar file in temporary directory, but found {len(os.listdir(temporary_tar_dir_tensors))}."
     )
+
+
+
+
+def test_multi_worker_loads_tensors(multi_worker_tar_dir):
+    """
+    Test that multiple workers can load tar files without duplication or errors.
+    
+    :param multi_worker_tar_dir: Temporary directory containing multiple tar files for multi-worker tests.
+    """
+    dataset = StreamingTensorDataset(str(multi_worker_tar_dir))
+
+    num_workers = 2
+    batch_size = 4
+
+    # Initialize DataLoader with multiple workers
+    dataloader = data.DataLoader(
+        dataset,
+        num_workers=num_workers,
+        batch_size=batch_size,
+        shuffle=False,
+    )
+
+    num_tar_files = 80
+    samples_per_tar = 20
+    total_samples = num_tar_files * samples_per_tar
+
+    # Collect all sample hashes to check for duplicates
+    collected_hashes = set()
+    sample_count = 0
+
+    try:
+        for batch in dataloader:
+            for i in range(batch.shape[0]):
+                image_data = batch[i].numpy()
+                img_hash = hashlib.md5(image_data).hexdigest()
+                assert img_hash not in collected_hashes, "Duplicate sample detected."
+                collected_hashes.add(img_hash)
+
+                sample_count += 1
+
+                if sample_count >= total_samples:
+                    dataset._stop = True
+                    break
+
+            if sample_count >= total_samples:
+                break
+    except Exception as e:
+        pytest.fail(f"Exception occurred during multi-worker loading: {type(e)} {e}")
+
+    # Verify that all samples were loaded without duplication
+    assert sample_count >= total_samples, (
+        f"Expected at least {total_samples} samples, but got {sample_count}."
+    )
+    assert len(collected_hashes) >= total_samples, (
+        "Number of unique samples does not match the expected total."
+    )
+
 
 def test_multi_worker_loads_tar(multi_worker_tar_dir):
     """
@@ -212,7 +271,7 @@ def test_multi_worker_loads_tar(multi_worker_tar_dir):
         dataset,
         num_workers=num_workers,
         batch_size=batch_size,
-        shuffle=False  # Shuffling is handled by WebDataset
+        shuffle=False,
     )
 
     num_tar_files = 80

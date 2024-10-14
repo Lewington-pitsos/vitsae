@@ -15,12 +15,23 @@ DONE
 2. 
 - check what our prior training run was doing "load_image" strategy
 
+3.
+- test if to_tensor has any impact --> it does. Instead we want to use frombuffer to load the raw bytes then decode_jpeg
+
+4. 
+- update tardataset so it spits out correct tensors
+
+
+5. 
 
 TODO NOW
-- update tardataset so it spits out images
-- read what people usually do with vision SAEs
-
+- test multi worker loading of dataset
+- start generating alternate dataset of activations
+    - re-build and push docker image
+    - repopulate queue
 
 
 TODO GENERAL
 - do a test run of retraining, compare to existing, see if it's getting better results
+- read what people usually do with vision SAEs
+- 

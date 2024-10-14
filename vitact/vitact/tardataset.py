@@ -4,12 +4,10 @@ import os
 import time
 import glob
 import tarfile
+from torchvision.io import ImageReadMode, decode_jpeg
+import torchvision.transforms as transforms
 from PIL import Image
 import io
-import hashlib  # For deterministic hashing
-
-from torchvision.io import decode_jpeg, ImageReadMode
-import torchvision.transforms as transforms
 
 class StreamingDataset(IterableDataset):
     def __init__(self, data_dir):
@@ -57,11 +55,10 @@ class StreamingDataset(IterableDataset):
                         for member in tar:
                             if member.isfile() and member.name.lower().endswith('.jpg'):
                                 try:
-                                    file_obj = tar.extractfile(member)
-                                    if file_obj is not None:
-                                        img_bytes = file_obj.read()
-                                        sample = {'jpg': img_bytes}
-                                        yield sample
+                                    with tar.extractfile(member) as file_obj:
+                                        if file_obj is not None:
+                                            sample = {'jpg': file_obj.read()}
+                                            yield sample
                                 except Exception as img_e:
                                     print(f'Worker {worker_id}: Error reading {member.name} in {processing_tar_file}: {img_e}')
 
@@ -76,7 +73,7 @@ class StreamingDataset(IterableDataset):
             # Brief pause before checking for new tar files
             time.sleep(0.3)
 
-class StreamingPILDataset(StreamingDataset):
+class StreamingTensorDataset(StreamingDataset):
     def __init__(self, data_dir):
         super().__init__(data_dir)
         self.transform = transforms.ToTensor()
@@ -88,7 +85,10 @@ class StreamingPILDataset(StreamingDataset):
 
             if 'jpg' in sample:
                 try:
-                    image = Image.open(io.BytesIO(sample['jpg']))
-                    yield image
+                    pil_img = Image.open(io.BytesIO(sample['jpg']))
+                    yield (self.transform(pil_img) * 255).to(torch.uint8)
                 except Exception as e:
-                    print(f'Error processing image: {e}')
+                    error_message = str(e)
+                    if len(error_message) > 1000:
+                        error_message = error_message[:1000] + '... [truncated]'
+                    print(f'Error processing image: {error_message}')

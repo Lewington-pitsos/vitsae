@@ -3,9 +3,11 @@ import fire
 import sys
 import os
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import randomname
+from torch.utils.data import DataLoader
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from vitact.tardataset import StreamingTensorDataset
 from utils import load_config
 from pull import keep_pulling
@@ -38,6 +40,7 @@ def generate_activations(
     print('run_name:', run_name)
 
     dataset = StreamingTensorDataset(tar_dir)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_data_workers)
 
     hook_locations = [
         (2, 'resid'),
@@ -62,7 +65,7 @@ def generate_activations(
             config,
             run_name,
             batches_per_cache=batches_per_cache,
-            dataset=dataset, 
+            dataloader=dataloader, 
             transformer_name=transformer_name, 
             batch_size=batch_size, 
             device='cuda',
@@ -74,7 +77,6 @@ def generate_activations(
             full_sequence=full_sequence,
             input_tensor_shape=(batch_size, *input_tensor_shape) if input_tensor_shape else None,
             num_cache_workers=num_cache_workers,
-            num_data_workers=num_data_workers,
             print_logs=True
         )
     except Exception as e:
