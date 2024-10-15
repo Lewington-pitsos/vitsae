@@ -1,4 +1,5 @@
 test
+**/cruft
 cruft
 .venv
 __pycache__

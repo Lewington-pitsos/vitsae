@@ -1,5 +1,6 @@
 import os
 import json
+import uuid
 
 import boto3
 
@@ -7,7 +8,7 @@ from vitact.utils import load_config
 
 def build_configs(output_filename=None):
     baseline =        {
-        "wandb_project": "test-vit-sae-multilayer",
+        "wandb_project": "CLIP-ViT-L-14-laion2B-s32B-b82K",
         "data_bucket": "sae-activations",
         "log_bucket": "sae-activations",
         "n_feats": 65536,
@@ -18,23 +19,27 @@ def build_configs(output_filename=None):
         "seq_len": 257,
         "cache_buffer_size": 3,
         "n_cache_workers": 4,
-        "batch_norm": False,
+        "batch_norm": True,
         'architecture': 'topk',
         "n_experts": None,
 
         "n_tokens": 1_000_000_000,
-        "save_every": 25_000_000,
-        
-        "save_checkpoints_to_s3": True,
+        "save_every": 33_000_000,
+
         "base_log_dir": "log",
     }
 
-
     all_configs = []
-    for location in ['11_resid', '22_resid']:
+    # locations = ['2_resid', '5_resid', '8_resid', '11_resid', '14_resid', '17_resid', '10_resid', '22_resid']
+    locations = ['2_resid']
+    for location in locations:
         clone = baseline.copy()
-        clone['data_name'] = f"CLIP-ViT-L-14/{location}"
-        clone['name'] = 'test-' + location
+        # clone['data_name'] = f"CLIP-ViT-L-14-laion2B-s32B-b82K/{location}"
+        # clone['id'] = location + '-' + str(uuid.uuid4())[:8]
+        clone['data_name'] = f"CLIP-ViT-L-14-laion2B-s32B-b82K/{location}"
+        clone['id'] = 'test-' + location + '-' + str(uuid.uuid4())[:8]
+        clone['wandb_project'] = 'test'
+        clone["base_log_dir"] = "test-log"
 
         print()
         print('Config: ----------------------------------')

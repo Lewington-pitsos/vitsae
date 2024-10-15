@@ -1,3 +1,39 @@
+---------------------------------------------- 15/10/2024
+1. 
+
+2. 
+
+3. 
+
+- refactor training script
+
+4. 
+
+- unit test saving/reloading
+
+
+5. 
+
+TODO NOW
+- get prefect saving/reloading
+   - run actual online test of saving/loading
+
+
+
+PREFLIGHT:
+- make sure we pass in an id, instead of name
+
+TODO GENERAL
+- download some activations, confirm they differ
+- do a test run of retraining, compare to existing, see if it's getting better results
+- look at position MSE
+- calculate the mean feature latent across the image and use this for classification
+- clean up that bullshit on s3
+
+
+---------------------------------------------- 14/10/2024
+
+
 Symptom: for all images, layer 2 activates the exact same neurons every time. 
 DONE
 - start server devbox
@@ -38,22 +74,4 @@ DONE
 - read imagenet curve detector https://arxiv.org/pdf/2406.03662
 - get dataloader working without tensors
 - test new image based tardataset
-
-TODO NOW
 - start generating alternate dataset of activations
-
-    PREFLIGHT
-    - re build docker image - done 
-    - test docker image - done
-    - push docker image - done
-    - re-build queue - done
-    - check run name
-    - delete old s3 activations cache
-
-
-TODO GENERAL
-- look at position MSE
-- read what people usually do with vision SAEs
-- do a test run of retraining, compare to existing, see if it's getting better results
-- calculate the mean feature latent across the image and use this for classification
-- clean up that bullshit on s3

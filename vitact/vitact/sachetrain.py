@@ -4,11 +4,11 @@ import traceback
 import boto3
 import threading
 
-from sache import train_sae
+from sache import train_sae, find_s3_checkpoint
 
 from vitact.utils import load_config
 
-VISIBILITY_TIMEOUT = 600 # 10 mins
+VISIBILITY_TIMEOUT = 60 * 4 # 4 minutes 
 
 def get_next_config_from_sqs(sqs, queue_url):
     try:
@@ -52,45 +52,6 @@ def keep_extending_invisibility(sqs, queue_url, receipt_handle, stop_event):
         print(f'Extended visibility timeout')
         time.sleep(60)
 
-def get_checkpoint_from_s3(s3, bucket, prefix):
-    all_existing_checkpoints = []
-    try:
-        paginator = s3.get_paginator('list_objects_v2')
-        page_iterator = paginator.paginate(Bucket=bucket, Prefix=prefix)
-
-        for page in page_iterator:
-            if 'Contents' in page:
-                all_existing_checkpoints.extend([obj['Key'] for obj in page['Contents'] if obj['Key'].endswith('.pt')])
-            else:
-                # If there are no contents in the current page, continue to the next
-                continue
-
-        if not all_existing_checkpoints:
-            return None, 0
-
-    except Exception as e:
-        print(f'Error fetching checkpoint from S3: {e}')
-        return None, 0
-
-    max_checkpoint = None
-    max_n_tokens = 0
-    for checkpoint in all_existing_checkpoints:
-
-        # Extract the number of tokens from the checkpoint filename
-        try:
-            n_tokens = int(checkpoint.split('/')[-1].split('.')[0])
-        except ValueError:
-            print(f"Could not extract n_tokens from checkpoint: {checkpoint}")
-            continue
-
-        if n_tokens > max_n_tokens:
-            max_n_tokens = n_tokens
-            max_checkpoint = checkpoint
-
-
-    max_checkpoint = f"s3://{bucket}/{max_checkpoint}" if max_checkpoint is not None else None
-    return max_checkpoint, max_n_tokens
-
 def keep_training():
     credentials = load_config()
 
@@ -114,7 +75,7 @@ def keep_training():
         try:
             print(f'Running with config: {config}')
 
-            checkpoint, n_tokens = get_checkpoint_from_s3(
+            checkpoint = find_s3_checkpoint(
                 boto3.client(
                     's3',
                     aws_access_key_id=credentials['AWS_ACCESS_KEY'],
@@ -126,14 +87,10 @@ def keep_training():
             )
 
             if checkpoint is not None:
-                print(f'Found checkpoint {checkpoint} with {n_tokens} tokens')
+                print(f'Found checkpoint {checkpoint}')
 
-            if checkpoint is not None and n_tokens >= config['n_tokens']:
-                print(f'Config {config} already trained up to {n_tokens} tokens. Skipping...')
-                delete_message_from_sqs(sqs, credentials['SQS_TRAINING_CONFIG_QUEUE_URL'], receipt_handle)
-            else:
-                train_sae(credentials=credentials, load_checkpoint=checkpoint, start_from=n_tokens, **config)
-                delete_message_from_sqs(sqs, credentials['SQS_TRAINING_CONFIG_QUEUE_URL'], receipt_handle)
+            train_sae(credentials=credentials, load_checkpoint=checkpoint, **config)
+            delete_message_from_sqs(sqs, credentials['SQS_TRAINING_CONFIG_QUEUE_URL'], receipt_handle)
         except Exception as e:
             print(f'Error running config {config}: {e}')
             traceback.print_exc()

@@ -67,11 +67,7 @@ aws ecs describe-tasks \
 
 aws ecs describe-tasks \
     --cluster vit-sae-ecs-cluster \
-    --tasks $(aws ecs list-tasks \
-        --cluster vit-sae-ecs-cluster \
-        --service-name training-service \
-        --query "taskArns" \
-        --output text) \
+    --tasks $(aws ecs list-tasks \ --cluster vit-sae-ecs-cluster \ --service-name activations-service \ --query "taskArns" \ --output text) \
     --query "tasks[].{TaskArn:taskArn, Status:lastStatus, DesiredStatus:desiredStatus}" \
     --output table
 

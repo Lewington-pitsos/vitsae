@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import sys
 
 from sache import SpecifiedHookedViT
-from vitact.filedataset import FilePathDataset, FloatFilePathDataset
+from vitact.filedataset import FloatFilePathDataset
 from vitact.download import download_laion
 
 def download_sae_checkpoints(sae_checkpoints, base_dir='cruft'):
@@ -52,7 +52,6 @@ def generate_latents(
         device='cuda',
         image_dir='cruft/top9',
         n_features=None,
-        sequence_idx=0
     ):
 
     # Prepare locations and load SAEs
@@ -84,11 +83,17 @@ def generate_latents(
             for location in locations:
                 layer, hook_name = location
                 sae = sae_dict[location]
-                activation = activations[location]
-                activation = activation[:, sequence_idx]
+                activation = activations[location] # (batch_size, seq_len, num_features)
+
+                batch_size, seq_len, num_features = activation.shape
+                activation = activation.view(batch_size * seq_len, num_features)
 
                 latent = sae.forward_descriptive(activation)['latent']
                 latent = latent.detach()
+
+                latent_dim = latent.size(1)
+                latent = latent.view(batch_size, seq_len, latent_dim)
+                latent = latent.max(dim=1).values
 
                 if location not in num_features_dict:
                     actual_num_features = latent.size(1)
@@ -100,7 +105,6 @@ def generate_latents(
                     topk_values_dict[location] = torch.full((num_features, num_top), float('-inf'), device=device)
                     topk_indices_dict[location] = torch.full((num_features, num_top), -1, dtype=torch.long, device=device)
 
-                # Only process up to num_features
                 num_features = num_features_dict[location]
                 latent = latent[:, :num_features]
 
@@ -133,10 +137,15 @@ def generate_latents(
             os.makedirs(layer_dir)
         print(f'Saving images to: {layer_dir}')
 
+        count = 0
         for feature_idx in tqdm(range(num_features), desc=f'Processing features for layer {layer}'):
+            if count > 100:
+                break
 
             if topk_values[feature_idx].min() <= 0:
                 continue
+
+            count += 1
 
             indices = topk_indices[feature_idx].tolist()
             values = topk_values[feature_idx].tolist()
@@ -187,27 +196,27 @@ def generate_latents(
 if __name__ == '__main__':
 
     sae_checkpoints = [
-        's3://sae-activations/log/CLIP-ViT-L-14/11_resid/11_resid_6705c9/600023040.pt',
-        's3://sae-activations/log/CLIP-ViT-L-14/14_resid/14_resid_6d8202/600023040.pt',
-        's3://sae-activations/log/CLIP-ViT-L-14/17_resid/17_resid_e0766f/600023040.pt',
-        's3://sae-activations/log/CLIP-ViT-L-14/20_resid/20_resid_5998fd/600023040.pt',
+        # 's3://sae-activations/log/CLIP-ViT-L-14/11_resid/11_resid_6705c9/600023040.pt',
+        # 's3://sae-activations/log/CLIP-ViT-L-14/14_resid/14_resid_6d8202/600023040.pt',
+        # 's3://sae-activations/log/CLIP-ViT-L-14/17_resid/17_resid_e0766f/600023040.pt',
         's3://sae-activations/log/CLIP-ViT-L-14/22_resid/22_resid_8fa3ab/600023040.pt',
         's3://sae-activations/log/CLIP-ViT-L-14/2_resid/2_resid_29c579/600023040.pt',
+        # 's3://sae-activations/log/CLIP-ViT-L-14/20_resid/20_resid_5998fd/600023040.pt',
         's3://sae-activations/log/CLIP-ViT-L-14/5_resid/5_resid_79d8c9/600023040.pt',
-        's3://sae-activations/log/CLIP-ViT-L-14/8_resid/8_resid_9a2c60/600023040.pt',
+        # 's3://sae-activations/log/CLIP-ViT-L-14/8_resid/8_resid_9a2c60/600023040.pt',
     ]
 
-    image_dir = 'cruft/top9'
+    image_dir = '../cruft/top9'
 
     if os.path.exists(image_dir):
         raise ValueError(f"Output directory {image_dir} already exists. Please remove it before running this script.")
 
-    base_dir = 'cruft'
+    base_dir = '../cruft'
 
     if not os.path.exists(base_dir):
         os.makedirs(base_dir)
 
-    laion_img_dir = 'cruft/bench'
+    laion_img_dir = '../cruft/bench'
 
     if not os.path.exists(laion_img_dir):
         download_laion(
@@ -225,17 +234,16 @@ if __name__ == '__main__':
 
     # ds = FilePathDataset(laion_img_dir)
     ds = FloatFilePathDataset(laion_img_dir)
-    batch_size = 384
+    batch_size = 200
     dataloader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=3)
 
     generate_latents(
         sae_paths=sae_paths,
-        n_activations=40_000,
+        n_activations=5_000,
         dataloader=dataloader,
         batch_size=batch_size,
         num_top=9,  # Number of top activations to keep
         device='cuda',
-        image_dir='cruft/top9',
+        image_dir=image_dir,
         n_features=1024, # Specify the number of features you want to process
-        sequence_idx=0
     )
