@@ -14,7 +14,7 @@ def build_configs(output_filename=None):
         "n_feats": 65536,
         "batch_size": 32896,
         "k": 32,
-        "lr": 0.00005,
+        "lr": 0.00009,
         "d_in": 1024,
         "seq_len": 257,
         "cache_buffer_size": 3,
@@ -30,16 +30,11 @@ def build_configs(output_filename=None):
     }
 
     all_configs = []
-    # locations = ['2_resid', '5_resid', '8_resid', '11_resid', '14_resid', '17_resid', '10_resid', '22_resid']
-    locations = ['2_resid']
+    locations = ['2_resid', '5_resid', '8_resid', '11_resid', '14_resid', '17_resid', '10_resid', '22_resid']
     for location in locations:
         clone = baseline.copy()
-        # clone['data_name'] = f"CLIP-ViT-L-14-laion2B-s32B-b82K/{location}"
-        # clone['id'] = location + '-' + str(uuid.uuid4())[:8]
         clone['data_name'] = f"CLIP-ViT-L-14-laion2B-s32B-b82K/{location}"
-        clone['id'] = 'test-' + location + '-' + str(uuid.uuid4())[:8]
-        clone['wandb_project'] = 'test'
-        clone["base_log_dir"] = "test-log"
+        clone['id'] = location + '-' + str(uuid.uuid4())[:8]
 
         print()
         print('Config: ----------------------------------')

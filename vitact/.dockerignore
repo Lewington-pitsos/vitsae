@@ -1,6 +1,7 @@
 test
-**/cruft
 cruft
+wandb
+log
 .venv
 __pycache__
 .pytest_cache

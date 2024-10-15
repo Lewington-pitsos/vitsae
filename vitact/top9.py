@@ -68,6 +68,7 @@ def generate_latents(
     num_features_dict = {}
     topk_values_dict = {}
     topk_indices_dict = {}
+    firing_freq_dict = {}
     cumulative_file_paths = []
     cumulative_index = 0
 
@@ -104,7 +105,11 @@ def generate_latents(
                     num_features_dict[location] = num_features
                     topk_values_dict[location] = torch.full((num_features, num_top), float('-inf'), device=device)
                     topk_indices_dict[location] = torch.full((num_features, num_top), -1, dtype=torch.long, device=device)
+                    firing_freq_dict[location] = torch.zeros(num_features, dtype=torch.long, device=device)
 
+                # Only process up to num_features
+
+                firing_freq_dict[location] += (latent > 0).sum(dim=0)
                 num_features = num_features_dict[location]
                 latent = latent[:, :num_features]
 
@@ -124,74 +129,83 @@ def generate_latents(
                 topk_indices_dict[location] = topk_global_indices
 
             if (i + 1) * batch_size >= n_activations:
+                firing_freq_dict[location] /= (i * batch_size)
                 break
 
-    for location in locations:
-        layer, hook_name = location
-        num_features = num_features_dict[location]
-        topk_values = topk_values_dict[location]
-        topk_indices = topk_indices_dict[location]
+        for location in locations:
+            layer, hook_name = location
+            num_features = num_features_dict[location]
+            topk_values = topk_values_dict[location]
+            topk_indices = topk_indices_dict[location]
+            firing_freq = firing_freq_dict[location]
 
-        layer_dir = os.path.join(image_dir, f'layer_{layer}_{hook_name}')
-        if not os.path.exists(layer_dir):
-            os.makedirs(layer_dir)
-        print(f'Saving images to: {layer_dir}')
+            layer_dir = os.path.join(image_dir, f'layer_{layer}_{hook_name}')
+            if not os.path.exists(layer_dir):
+                os.makedirs(layer_dir)
+            print(f'Saving images to: {layer_dir}')
 
-        count = 0
-        for feature_idx in tqdm(range(num_features), desc=f'Processing features for layer {layer}'):
-            if count > 100:
-                break
-
-            if topk_values[feature_idx].min() <= 0:
-                continue
-
-            count += 1
-
-            indices = topk_indices[feature_idx].tolist()
-            values = topk_values[feature_idx].tolist()
-            file_paths = [cumulative_file_paths[idx] for idx in indices]
-
-            result = {
-                'indices': indices,
-                'values': values,
-                'file_paths': file_paths
+            stats = {
+                'num_features': num_features,
+                'n_samples': i * batch_size,
+                'firing_freq': firing_freq.tolist()
             }
 
-            feature_dir = os.path.join(layer_dir, f'feature_{feature_idx}')
-            if not os.path.exists(feature_dir):
-                os.makedirs(feature_dir)
+            with open(os.path.join(layer_dir, 'stats.json'), 'w') as f:
+                json.dump(stats, f)
 
-            with open(os.path.join(feature_dir, f'{feature_idx}_top{num_top}.json'), 'w') as f:
-                json.dump(result, f)
-
-            # Load the images
-            images = []
-            for i, path in enumerate(file_paths):
-                if i >= num_top:
+            count = 0
+            for feature_idx in tqdm(range(num_features), desc=f'Processing features for layer {layer}'):
+                if count > 100:
                     break
-                try:
-                    img = Image.open(path).convert('RGB')  # Ensure image is in RGB
-                    images.append(img)
-                except Exception as e:
-                    print(f'Error loading image {path}: {e}')
 
-            # Save individual images
-            for i, img in enumerate(images):
-                img_path = os.path.join(feature_dir, f'{feature_idx}_top{num_top}_{i}.png')
-                img.save(img_path)
+                if topk_values[feature_idx].min() <= 0:
+                    continue
 
-            # Plot the images in a grid (adjust grid size based on num_top)
-            fig, axes = plt.subplots(3, 3, figsize=(9, 9))
-            for ax, img in zip(axes.flatten(), images):
-                ax.imshow(img)
-                ax.axis('off')
-            plt.tight_layout()
-            grid_path = os.path.join(feature_dir, f'{feature_idx}_grid.png')
-            plt.savefig(grid_path)
-            plt.close(fig)
+                count += 1
+                indices = topk_indices[feature_idx].tolist()
+                values = topk_values[feature_idx].tolist()
+                file_paths = [cumulative_file_paths[idx] for idx in indices]
 
-            print(f'Saved images for feature {feature_idx} in layer {layer}')
+                result = {
+                    'indices': indices,
+                    'values': values,
+                    'file_paths': file_paths
+                }
 
+                feature_dir = os.path.join(layer_dir, f'feature_{feature_idx}')
+                if not os.path.exists(feature_dir):
+                    os.makedirs(feature_dir)
+
+                with open(os.path.join(feature_dir, f'{feature_idx}_top{num_top}.json'), 'w') as f:
+                    json.dump(result, f)
+
+                # Load the images
+                images = []
+                for i, path in enumerate(file_paths):
+                    if i >= num_top:
+                        break
+                    try:
+                        img = Image.open(path).convert('RGB')  # Ensure image is in RGB
+                        images.append(img)
+                    except Exception as e:
+                        print(f'Error loading image {path}: {e}')
+
+                # Save individual images
+                for i, img in enumerate(images):
+                    img_path = os.path.join(feature_dir, f'{feature_idx}_top{num_top}_{i}.png')
+                    img.save(img_path)
+
+                # Plot the images in a grid (adjust grid size based on num_top)
+                fig, axes = plt.subplots(3, 3, figsize=(9, 9))
+                for ax, img in zip(axes.flatten(), images):
+                    ax.imshow(img)
+                    ax.axis('off')
+                plt.tight_layout()
+                grid_path = os.path.join(feature_dir, f'{feature_idx}_grid.png')
+                plt.savefig(grid_path)
+                plt.close(fig)
+
+                print(f'Saved images for feature {feature_idx} in layer {layer}')
 
 if __name__ == '__main__':
 
