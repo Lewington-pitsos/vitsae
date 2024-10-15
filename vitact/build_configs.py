@@ -30,7 +30,9 @@ def build_configs(output_filename=None):
     }
 
     all_configs = []
-    locations = ['2_resid', '5_resid', '8_resid', '11_resid', '14_resid', '17_resid', '10_resid', '22_resid']
+    # locations = ['2_resid', '5_resid', '8_resid', '11_resid', '14_resid', '17_resid', '20_resid', '22_resid']
+    locations = ['20_resid']
+
     for location in locations:
         clone = baseline.copy()
         clone['data_name'] = f"CLIP-ViT-L-14-laion2B-s32B-b82K/{location}"

@@ -105,11 +105,11 @@ def generate_latents(
                     num_features_dict[location] = num_features
                     topk_values_dict[location] = torch.full((num_features, num_top), float('-inf'), device=device)
                     topk_indices_dict[location] = torch.full((num_features, num_top), -1, dtype=torch.long, device=device)
-                    firing_freq_dict[location] = torch.zeros(num_features, dtype=torch.long, device=device)
+                    firing_freq_dict[location] = torch.zeros(num_features, dtype=torch.float32, device=device)
 
                 # Only process up to num_features
 
-                firing_freq_dict[location] += (latent > 0).sum(dim=0)
+                firing_freq_dict[location] += (latent > 0).sum(dim=0)[:num_features]
                 num_features = num_features_dict[location]
                 latent = latent[:, :num_features]
 
@@ -129,7 +129,8 @@ def generate_latents(
                 topk_indices_dict[location] = topk_global_indices
 
             if (i + 1) * batch_size >= n_activations:
-                firing_freq_dict[location] /= (i * batch_size)
+                for location in locations:
+                    firing_freq_dict[location] /= (i * batch_size)
                 break
 
         for location in locations:
