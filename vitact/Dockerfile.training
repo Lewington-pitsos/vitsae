@@ -61,6 +61,7 @@ COPY --from=builder /vitact /vitact
 WORKDIR /vitact
 
 RUN chmod +x train.sh
+RUN chmod +x vpcgateway.sh
 
 # Define the default command
 CMD [ "./train.sh" ]
