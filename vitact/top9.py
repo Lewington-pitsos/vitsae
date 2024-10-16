@@ -8,8 +8,8 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import sys
 
-from sache import SpecifiedHookedViT
-from vitact.filedataset import FloatFilePathDataset
+from sache import SpecifiedHookedViT, TopKSAE
+from vitact.filedataset import FloatFilePathDataset, FilePathDataset, PILDataset
 from vitact.download import download_laion
 
 def download_sae_checkpoints(sae_checkpoints, base_dir='cruft'):
@@ -52,6 +52,7 @@ def generate_latents(
         device='cuda',
         image_dir='cruft/top9',
         n_features=None,
+        pos_idx=None,
     ):
 
     # Prepare locations and load SAEs
@@ -59,11 +60,12 @@ def generate_latents(
     transformer = SpecifiedHookedViT(locations, transformer_name, device=device)
     sae_dict = {}
     for location, sae_path in sae_paths.items():
-        sae = torch.load(sae_path, map_location=device)
+        sae = TopKSAE(k=32, n_features=65536, d_in=1024, device=device)
+        checkpoint = torch.load(sae_path, map_location=device)
+        sae.load_state_dict(checkpoint['model_state_dict'])
         sae_dict[location] = sae
 
-    if not os.path.exists(image_dir):
-        os.makedirs(image_dir)
+
 
     num_features_dict = {}
     topk_values_dict = {}
@@ -75,7 +77,13 @@ def generate_latents(
     with torch.no_grad():
         for i, (paths, batch) in tqdm(enumerate(dataloader), total=n_activations // batch_size):
             activations = transformer.all_activations(batch)
-            current_batch_size = batch.size(0)  # Avoid shadowing the outer batch_size
+            if isinstance(batch, torch.Tensor):
+                current_batch_size = batch.size(0)  # Avoid shadowing the outer batch_size
+            elif isinstance(batch, list):
+                current_batch_size = len(batch)
+            else:
+                raise ValueError(f'Unknown batch type: {type(batch)}')
+            
             current_indices = torch.arange(cumulative_index, cumulative_index + current_batch_size, dtype=torch.long, device=device)
             cumulative_index += current_batch_size
 
@@ -86,15 +94,20 @@ def generate_latents(
                 sae = sae_dict[location]
                 activation = activations[location] # (batch_size, seq_len, num_features)
 
-                batch_size, seq_len, num_features = activation.shape
-                activation = activation.view(batch_size * seq_len, num_features)
+                if pos_idx is None:
+                    batch_size, seq_len, num_features = activation.shape
+                    activation = activation.view(batch_size * seq_len, num_features)
 
-                latent = sae.forward_descriptive(activation)['latent']
-                latent = latent.detach()
+                    latent = sae.forward_descriptive(activation)['latent']
+                    latent = latent.detach()
 
-                latent_dim = latent.size(1)
-                latent = latent.view(batch_size, seq_len, latent_dim)
-                latent = latent.max(dim=1).values
+                    latent_dim = latent.size(1)
+                    latent = latent.view(batch_size, seq_len, latent_dim)
+                    latent = latent.max(dim=1).values
+                else:
+                    activation = activation[:, pos_idx]
+                    latent = sae.forward_descriptive(activation)['latent']
+
 
                 if location not in num_features_dict:
                     actual_num_features = latent.size(1)
@@ -132,7 +145,11 @@ def generate_latents(
                 for location in locations:
                     firing_freq_dict[location] /= (i * batch_size)
                 break
+        
 
+        if not os.path.exists(image_dir):
+            os.makedirs(image_dir)
+        
         for location in locations:
             layer, hook_name = location
             num_features = num_features_dict[location]
@@ -214,11 +231,14 @@ if __name__ == '__main__':
         # 's3://sae-activations/log/CLIP-ViT-L-14/11_resid/11_resid_6705c9/600023040.pt',
         # 's3://sae-activations/log/CLIP-ViT-L-14/14_resid/14_resid_6d8202/600023040.pt',
         # 's3://sae-activations/log/CLIP-ViT-L-14/17_resid/17_resid_e0766f/600023040.pt',
-        's3://sae-activations/log/CLIP-ViT-L-14/22_resid/22_resid_8fa3ab/600023040.pt',
-        's3://sae-activations/log/CLIP-ViT-L-14/2_resid/2_resid_29c579/600023040.pt',
+        # 's3://sae-activations/log/CLIP-ViT-L-14/22_resid/22_resid_8fa3ab/600023040.pt',
+        # 's3://sae-activations/log/CLIP-ViT-L-14/2_resid/2_resid_29c579/600023040.pt',
         # 's3://sae-activations/log/CLIP-ViT-L-14/20_resid/20_resid_5998fd/600023040.pt',
-        's3://sae-activations/log/CLIP-ViT-L-14/5_resid/5_resid_79d8c9/600023040.pt',
+        # 's3://sae-activations/log/CLIP-ViT-L-14/5_resid/5_resid_79d8c9/600023040.pt',
         # 's3://sae-activations/log/CLIP-ViT-L-14/8_resid/8_resid_9a2c60/600023040.pt',
+
+        's3://sae-activations/log/CLIP-ViT-L-14-laion2B-s32B-b82K/17_resid/17_resid-2f8c464c/957076224.pt',
+        's3://sae-activations/log/CLIP-ViT-L-14-laion2B-s32B-b82K/2_resid/2_resid-84382bb6/957076224.pt',
     ]
 
     image_dir = '../cruft/top9'
@@ -235,7 +255,7 @@ if __name__ == '__main__':
 
     if not os.path.exists(laion_img_dir):
         download_laion(
-            n_urls=100_000,
+            n_urls=700_000,
             processes_count=16,
             thread_count=32,
             image_size=224,
@@ -247,18 +267,18 @@ if __name__ == '__main__':
 
     sae_paths = download_sae_checkpoints(sae_checkpoints, base_dir=base_dir)
 
-    # ds = FilePathDataset(laion_img_dir)
-    ds = FloatFilePathDataset(laion_img_dir)
-    batch_size = 200
-    dataloader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=3)
+    ds = PILDataset(laion_img_dir)
+    batch_size = 384
+    dataloader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=3, collate_fn=lambda x: [[y[0] for y in x], [y[1] for y in x]])
 
     generate_latents(
         sae_paths=sae_paths,
-        n_activations=5_000,
+        n_activations=500_000,
         dataloader=dataloader,
         batch_size=batch_size,
         num_top=9,  # Number of top activations to keep
         device='cuda',
         image_dir=image_dir,
         n_features=1024, # Specify the number of features you want to process
+        pos_idx=0
     )

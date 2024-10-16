@@ -68,7 +68,23 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
-# Create NAT Gateway for the private subnet
+resource "aws_vpc_endpoint" "s3_endpoint" {
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.${var.aws_region}.s3"
+  vpc_endpoint_type = "Gateway"
+
+  route_table_ids = [
+    aws_route_table.private_rt.id,
+    aws_route_table.private_rt_b.id,
+    aws_route_table.private_rt_c.id,
+  ]
+
+  tags = {
+    Name = "${var.environment}-s3-endpoint"
+  }
+}
+
+
 resource "aws_eip" "nat_eip" {
   domain = "vpc"
 }

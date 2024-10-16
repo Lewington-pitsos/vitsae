@@ -49,6 +49,12 @@ class FilePathDataset(FileDataset):
     def _get_image_data(self, image_path):
         return image_path, read_image(image_path, mode=ImageReadMode.RGB)
 
+class PILDataset(FileDataset):
+    def _get_image_data(self, image_path):
+        with Image.open(image_path) as pil_img:
+            pil_img.load()
+            return image_path, pil_img
+
 class FloatFilePathDataset(FileDataset):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -61,3 +67,13 @@ class FloatFilePathDataset(FileDataset):
             image_tensor = self.transform(image)
 
         return image_path, image_tensor
+
+# if __name__ == '__main__':
+#     from torch.utils.data import DataLoader
+#     ds = PILDataset('../cruft/bench')
+#     batch_size = 5
+#     dataloader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=3, collate_fn=lambda x: [[y[0] for y in x], [y[1] for y in x]])
+
+#     for x in dataloader:
+#         print(x)
+#         break
