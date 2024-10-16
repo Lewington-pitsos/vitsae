@@ -204,6 +204,7 @@ def generate_latents(
                         break
                     try:
                         img = Image.open(path).convert('RGB')  # Ensure image is in RGB
+                        img.resize((224, 224))
                         images.append(img)
                     except Exception as e:
                         print(f'Error loading image {path}: {e}')
@@ -280,5 +281,5 @@ if __name__ == '__main__':
         device='cuda',
         image_dir=image_dir,
         n_features=1024, # Specify the number of features you want to process
-        pos_idx=0
+        pos_idx=137
     )
