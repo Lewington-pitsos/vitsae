@@ -1,8 +1,8 @@
 set -e
-./vpcgateway.sh
 
 nvidia-smi
 
+./vpcgateway.sh
 
 echo "Starting Training"
 

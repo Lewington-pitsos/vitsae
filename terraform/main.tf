@@ -6,7 +6,6 @@ provider "aws" {
 #######################################
 # 0. VPC and Subnet Configuration
 #######################################
-
 # Create VPC
 resource "aws_vpc" "ml_vpc" {
   cidr_block = "10.0.0.0/16"
@@ -17,22 +16,44 @@ resource "aws_vpc" "ml_vpc" {
 }
 
 # Create Subnets
-resource "aws_subnet" "public_subnet" {
-  vpc_id     = aws_vpc.ml_vpc.id
-  cidr_block = "10.0.1.0/24"
-  availability_zone = "${var.region}a"
-
+resource "aws_subnet" "public_subnet_a" {
+  vpc_id                  = aws_vpc.ml_vpc.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "${var.region}a"
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${var.environment}-public-subnet"
+    Name = "${var.environment}-public-subnet-a"
+  }
+}
+
+resource "aws_subnet" "public_subnet_b" {
+  vpc_id                  = aws_vpc.ml_vpc.id
+  cidr_block              = "10.0.5.0/24"
+  availability_zone       = "${var.region}b"
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = "${var.environment}-public-subnet-b"
+  }
+}
+
+resource "aws_subnet" "public_subnet_c" {
+  vpc_id                  = aws_vpc.ml_vpc.id
+  cidr_block              = "10.0.6.0/24"
+  availability_zone       = "${var.region}c"
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = "${var.environment}-public-subnet-c"
   }
 }
 
 resource "aws_subnet" "private_subnet" {
-  vpc_id     = aws_vpc.ml_vpc.id
-  cidr_block = "10.0.2.0/24"
-  availability_zone = "${var.region}a"
+  vpc_id                  = aws_vpc.ml_vpc.id
+  cidr_block              = "10.0.2.0/24"
+  availability_zone       = "${var.region}a"
+  map_public_ip_on_launch = true
 
   tags = {
     Name = "${var.environment}-private-subnet"
@@ -40,61 +61,33 @@ resource "aws_subnet" "private_subnet" {
 }
 
 resource "aws_subnet" "private_subnet_b" {
-  vpc_id     = aws_vpc.ml_vpc.id
-  cidr_block = "10.0.3.0/24"
-  availability_zone = "${var.region}b"
+  vpc_id                  = aws_vpc.ml_vpc.id
+  cidr_block              = "10.0.3.0/24"
+  availability_zone       = "${var.region}b"
+  map_public_ip_on_launch = true
 
   tags = {
-    Name = "${var.environment}-private-subnet"
+    Name = "${var.environment}-private-subnet-b"
   }
 }
 
 resource "aws_subnet" "private_subnet_c" {
-  vpc_id     = aws_vpc.ml_vpc.id
-  cidr_block = "10.0.4.0/24"
-  availability_zone = "${var.region}c"
+  vpc_id                  = aws_vpc.ml_vpc.id
+  cidr_block              = "10.0.4.0/24"
+  availability_zone       = "${var.region}c"
+  map_public_ip_on_launch = true
 
   tags = {
-    Name = "${var.environment}-private-subnet"
+    Name = "${var.environment}-private-subnet-c"
   }
 }
 
-# Create Internet Gateway for the public subnet
+# Create Internet Gateway
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.ml_vpc.id
 
   tags = {
     Name = "${var.environment}-igw"
-  }
-}
-
-resource "aws_vpc_endpoint" "s3_endpoint" {
-  vpc_id            = aws_vpc.main.id
-  service_name      = "com.amazonaws.${var.aws_region}.s3"
-  vpc_endpoint_type = "Gateway"
-
-  route_table_ids = [
-    aws_route_table.private_rt.id,
-    aws_route_table.private_rt_b.id,
-    aws_route_table.private_rt_c.id,
-  ]
-
-  tags = {
-    Name = "${var.environment}-s3-endpoint"
-  }
-}
-
-
-resource "aws_eip" "nat_eip" {
-  domain = "vpc"
-}
-
-resource "aws_nat_gateway" "nat_gw" {
-  allocation_id = aws_eip.nat_eip.id
-  subnet_id     = aws_subnet.public_subnet.id
-
-  tags = {
-    Name = "${var.environment}-nat-gw"
   }
 }
 
@@ -112,19 +105,28 @@ resource "aws_route_table" "public_rt" {
   }
 }
 
-# Associate Public Subnet with Public Route Table
-resource "aws_route_table_association" "public_rt_assoc" {
-  subnet_id      = aws_subnet.public_subnet.id
+# Adjust Route Table Associations accordingly
+resource "aws_route_table_association" "public_rt_assoc_a" {
+  subnet_id      = aws_subnet.public_subnet_a.id
   route_table_id = aws_route_table.public_rt.id
 }
 
+resource "aws_route_table_association" "public_rt_assoc_b" {
+  subnet_id      = aws_subnet.public_subnet_b.id
+  route_table_id = aws_route_table.public_rt.id
+}
+
+resource "aws_route_table_association" "public_rt_assoc_c" {
+  subnet_id      = aws_subnet.public_subnet_c.id
+  route_table_id = aws_route_table.public_rt.id
+}
 # Create Private Route Table
 resource "aws_route_table" "private_rt" {
   vpc_id = aws_vpc.ml_vpc.id
 
   route {
     cidr_block = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.nat_gw.id
+    gateway_id = aws_internet_gateway.igw.id
   }
 
   tags = {
@@ -132,9 +134,9 @@ resource "aws_route_table" "private_rt" {
   }
 }
 
-# Associate Private Subnet with Private Route Table
-resource "aws_route_table_association" "private_rt_assoc" {
-  subnet_id      = aws_subnet.private_subnet.id
+# Associate Private Subnets with Private Route Table
+resource "aws_route_table_association" "private_rt_assoc_a" {
+  subnet_id      = aws_subnet.private_subnet_a.id
   route_table_id = aws_route_table.private_rt.id
 }
 
@@ -146,6 +148,19 @@ resource "aws_route_table_association" "private_rt_assoc_b" {
 resource "aws_route_table_association" "private_rt_assoc_c" {
   subnet_id      = aws_subnet.private_subnet_c.id
   route_table_id = aws_route_table.private_rt.id
+}
+
+# VPC Endpoint for S3 (Optional)
+resource "aws_vpc_endpoint" "s3_endpoint" {
+  vpc_id            = aws_vpc.ml_vpc.id
+  service_name      = "com.amazonaws.${var.region}.s3"
+  vpc_endpoint_type = "Gateway"
+
+  route_table_ids = [aws_route_table.private_rt.id]
+
+  tags = {
+    Name = "${var.environment}-s3-endpoint"
+  }
 }
 
 #######################################
@@ -518,7 +533,7 @@ resource "aws_autoscaling_group" "ecs_autoscaling_group" {
   }
 
   vpc_zone_identifier = [
-    aws_subnet.private_subnet.id, # a
+    aws_subnet.private_subnet_a.id, # a
     aws_subnet.private_subnet_b.id,
     aws_subnet.private_subnet_c.id,
   ]
@@ -671,7 +686,7 @@ resource "aws_ecs_service" "tar_service" {
   }
 
   network_configuration {
-    subnets         = [aws_subnet.private_subnet.id]
+    subnets         = [aws_subnet.private_subnet_a.id]
     security_groups = [aws_security_group.ecs_security_group.id]
   }
 
@@ -960,7 +975,7 @@ resource "aws_ecs_service" "activations_service" {
 
   network_configuration {
     subnets         = [
-      aws_subnet.private_subnet.id,
+      aws_subnet.private_subnet_a.id,
       aws_subnet.private_subnet_b.id,
       aws_subnet.private_subnet_c.id,
     ]
@@ -1070,7 +1085,7 @@ resource "aws_autoscaling_group" "activations_autoscaling_group" {
   
 
   vpc_zone_identifier = [
-        aws_subnet.private_subnet.id, # a
+        aws_subnet.private_subnet_a.id,
         aws_subnet.private_subnet_b.id,
         aws_subnet.private_subnet_c.id,
   ]
@@ -1266,7 +1281,7 @@ resource "aws_ecs_service" "training_service" {
 
   network_configuration {
     subnets         = [
-      aws_subnet.private_subnet.id,
+      aws_subnet.private_subnet_a.id,
       aws_subnet.private_subnet_b.id,
       aws_subnet.private_subnet_c.id,
     ]

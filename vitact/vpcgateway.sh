@@ -1,20 +1,27 @@
 #!/bin/bash
 
-if [ -z "$BUCKET_NAME" ]; then
+if [ -z "$S3_ACTIVATIONS_BUCKET_NAME" ]; then
     echo "Error: BUCKET_NAME is not set."
     exit 1
 fi
+if ! command -v traceroute &> /dev/null
+then
+    echo "Error: traceroute could not be found"
+    exit 1
+fi
+
+
 
 which traceroute
 traceroute --version
 
-# save output to a file 
-traceroute "$BUCKET_NAME.s3.amazonaws.com" > /tmp/traceroute_output.txt
+traceroute "$S3_ACTIVATIONS_BUCKET_NAME.s3.amazonaws.com" > /tmp/traceroute_output.txt
 
 FILE=/tmp/traceroute_output.txt
+cat "$FILE"
 
-is_positive() {
-    awk 'NR > 2 { 
+vpc_gateway() {
+    awk 'NR > 3 { 
         # Check if the second, third, or fourth fields are not '*'
         if ($2 != "*" || $3 != "*" || $4 != "*") { 
             exit 1 
@@ -22,8 +29,7 @@ is_positive() {
     }' "$FILE"
 }
 
-# Invoke the function and capture the exit status
-if is_positive; then
+if vpc_gateway; then
     echo "Confirmed that S3 connection is going through a VPC Gateway Endpoint."
     exit 0
 else
