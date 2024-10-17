@@ -6,7 +6,6 @@ import json
 from tqdm import tqdm
 from PIL import Image
 import matplotlib.pyplot as plt
-import sys
 
 from sache import SpecifiedHookedViT, TopKSAE
 from vitact.filedataset import FloatFilePathDataset, FilePathDataset, PILDataset

@@ -99,4 +99,4 @@ docker run -e HF_TOKEN=$HF_TOKEN -e AWS_ACCESS_KEY=$AWS_ACCESS_KEY -e AWS_SECRET
 aws ecs describe-tasks --cluster vit-sae-ecs-cluster --tasks $(aws ecs list-tasks --cluster vit-sae-ecs-cluster --service-name training-service --query "taskArns" --output text) --query "tasks[].{TaskArn:taskArn, Status:lastStatus, DesiredStatus:desiredStatus}" --output table
 aws logs filter-log-events --log-group-name /ecs/training-service --limit 4000 --query 'events[].message' --start-time $(( $(date +%s) - 300 ))000 
 
-aws logs filter-log-events --log-group-name /ecs/training-service --limit 500 --query 'events[].message' --start-time $(( $(date +%s) - 1000 ))000 --filter-pattern "checkpoint"
+aws logs filter-log-events --log-group-name /ecs/training-service --limit 500 --query 'events[].message' --start-time $(( $(date +%s) - 1000 ))000 --filter-pattern "download"

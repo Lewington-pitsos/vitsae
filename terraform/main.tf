@@ -2,10 +2,10 @@ provider "aws" {
   region = var.region
 }
 
-
 #######################################
 # 0. VPC and Subnet Configuration
 #######################################
+
 # Create VPC
 resource "aws_vpc" "ml_vpc" {
   cidr_block = "10.0.0.0/16"
@@ -15,10 +15,10 @@ resource "aws_vpc" "ml_vpc" {
   }
 }
 
-# Create Subnets
+# Create Public Subnets
 resource "aws_subnet" "public_subnet_a" {
   vpc_id                  = aws_vpc.ml_vpc.id
-  cidr_block              = "10.0.10.0/24"
+  cidr_block              = "10.0.5.0/24"
   availability_zone       = "${var.region}a"
   map_public_ip_on_launch = true
 
@@ -29,7 +29,7 @@ resource "aws_subnet" "public_subnet_a" {
 
 resource "aws_subnet" "public_subnet_b" {
   vpc_id                  = aws_vpc.ml_vpc.id
-  cidr_block              = "10.0.11.0/24"
+  cidr_block              = "10.0.6.0/24"
   availability_zone       = "${var.region}b"
   map_public_ip_on_launch = true
 
@@ -40,7 +40,7 @@ resource "aws_subnet" "public_subnet_b" {
 
 resource "aws_subnet" "public_subnet_c" {
   vpc_id                  = aws_vpc.ml_vpc.id
-  cidr_block              = "10.0.12.0/24"
+  cidr_block              = "10.0.7.0/24"
   availability_zone       = "${var.region}c"
   map_public_ip_on_launch = true
 
@@ -49,41 +49,7 @@ resource "aws_subnet" "public_subnet_c" {
   }
 }
 
-resource "aws_subnet" "private_subnet_a" {
-  vpc_id                  = aws_vpc.ml_vpc.id
-  cidr_block              = "10.0.13.0/24"
-  availability_zone       = "${var.region}a"
-  map_public_ip_on_launch = true
-
-  tags = {
-    Name = "${var.environment}-private-subnet"
-  }
-}
-
-resource "aws_subnet" "private_subnet_b" {
-  vpc_id                  = aws_vpc.ml_vpc.id
-  cidr_block              = "10.0.14.0/24"
-  availability_zone       = "${var.region}b"
-  map_public_ip_on_launch = true
-
-  tags = {
-    Name = "${var.environment}-private-subnet-b"
-  }
-}
-
-resource "aws_subnet" "private_subnet_c" {
-  vpc_id                  = aws_vpc.ml_vpc.id
-  cidr_block              = "10.0.15.0/24"
-  availability_zone       = "${var.region}c"
-  map_public_ip_on_launch = true
-
-  tags = {
-    Name = "${var.environment}-private-subnet-c"
-  }
-}
-
 # Create Internet Gateway
-# resource "aws_egress_only_internet_gateway" "example" {
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.ml_vpc.id
 
@@ -106,7 +72,20 @@ resource "aws_route_table" "public_rt" {
   }
 }
 
-# Adjust Route Table Associations accordingly
+resource "aws_vpc_endpoint" "s3_endpoint" {
+  vpc_id            = aws_vpc.ml_vpc.id
+  service_name      = "com.amazonaws.${var.region}.s3"
+  vpc_endpoint_type = "Gateway"
+
+  route_table_ids = [aws_route_table.public_rt.id]
+
+  tags = {
+    Name = "${var.environment}-s3-endpoint"
+  }
+}
+
+
+# Associate Public Subnets with Public Route Table
 resource "aws_route_table_association" "public_rt_assoc_a" {
   subnet_id      = aws_subnet.public_subnet_a.id
   route_table_id = aws_route_table.public_rt.id
@@ -120,48 +99,6 @@ resource "aws_route_table_association" "public_rt_assoc_b" {
 resource "aws_route_table_association" "public_rt_assoc_c" {
   subnet_id      = aws_subnet.public_subnet_c.id
   route_table_id = aws_route_table.public_rt.id
-}
-# Create Private Route Table
-resource "aws_route_table" "private_rt" {
-  vpc_id = aws_vpc.ml_vpc.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.igw.id
-  }
-
-  tags = {
-    Name = "${var.environment}-private-rt"
-  }
-}
-
-# Associate Private Subnets with Private Route Table
-resource "aws_route_table_association" "private_rt_assoc_a" {
-  subnet_id      = aws_subnet.private_subnet_a.id
-  route_table_id = aws_route_table.private_rt.id
-}
-
-resource "aws_route_table_association" "private_rt_assoc_b" {
-  subnet_id      = aws_subnet.private_subnet_b.id
-  route_table_id = aws_route_table.private_rt.id
-}
-
-resource "aws_route_table_association" "private_rt_assoc_c" {
-  subnet_id      = aws_subnet.private_subnet_c.id
-  route_table_id = aws_route_table.private_rt.id
-}
-
-# VPC Endpoint for S3 (Optional)
-resource "aws_vpc_endpoint" "s3_endpoint" {
-  vpc_id            = aws_vpc.ml_vpc.id
-  service_name      = "com.amazonaws.${var.region}.s3"
-  vpc_endpoint_type = "Gateway"
-
-  route_table_ids = [aws_route_table.private_rt.id]
-
-  tags = {
-    Name = "${var.environment}-s3-endpoint"
-  }
 }
 
 #######################################
@@ -415,20 +352,6 @@ resource "aws_security_group" "ecs_security_group" {
   description = "Allow necessary traffic for ECS instances"
   vpc_id      = aws_vpc.ml_vpc.id
 
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.my_ip_cidr_block]
-  }
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -534,9 +457,9 @@ resource "aws_autoscaling_group" "ecs_autoscaling_group" {
   }
 
   vpc_zone_identifier = [
-    aws_subnet.private_subnet_a.id, # a
-    aws_subnet.private_subnet_b.id,
-    aws_subnet.private_subnet_c.id,
+    aws_subnet.public_subnet_a.id, # a
+    aws_subnet.public_subnet_b.id,
+    aws_subnet.public_subnet_c.id,
   ]
 
   initial_lifecycle_hook {
@@ -590,7 +513,7 @@ resource "aws_ecs_capacity_provider" "ecs_capacity_provider" {
 
 resource "aws_ecs_task_definition" "tar_create_task" {
   family                   = "tar_create"
-  network_mode             = "awsvpc"
+  network_mode             = "bridge"
   requires_compatibilities = ["EC2"]
   execution_role_arn       = aws_iam_role.ecs_interface_role.arn
   task_role_arn            = aws_iam_role.ecs_interface_role.arn
@@ -684,11 +607,6 @@ resource "aws_ecs_service" "tar_service" {
     capacity_provider = aws_ecs_capacity_provider.ecs_capacity_provider.name
     weight            = 1
     base              = 0
-  }
-
-  network_configuration {
-    subnets         = [aws_subnet.private_subnet_a.id]
-    security_groups = [aws_security_group.ecs_security_group.id]
   }
 
   deployment_maximum_percent         = 200
@@ -871,7 +789,7 @@ resource "aws_ssm_parameter" "ecs_service_name" {
 
 resource "aws_ecs_task_definition" "activations_service_task" {
   family                   = "activations-service"
-  network_mode             = "awsvpc"
+  network_mode             = "bridge"
   requires_compatibilities = ["EC2"]
   execution_role_arn       = aws_iam_role.ecs_interface_role.arn
   task_role_arn            = aws_iam_role.ecs_interface_role.arn
@@ -972,15 +890,6 @@ resource "aws_ecs_service" "activations_service" {
     capacity_provider = aws_ecs_capacity_provider.activations_capacity_provider.name
     weight            = 1
     base              = 0
-  }
-
-  network_configuration {
-    subnets         = [
-      aws_subnet.private_subnet_a.id,
-      aws_subnet.private_subnet_b.id,
-      aws_subnet.private_subnet_c.id,
-    ]
-    security_groups = [aws_security_group.ecs_security_group.id]
   }
 
   deployment_maximum_percent         = 200
@@ -1086,9 +995,9 @@ resource "aws_autoscaling_group" "activations_autoscaling_group" {
   
 
   vpc_zone_identifier = [
-        aws_subnet.private_subnet_a.id,
-        aws_subnet.private_subnet_b.id,
-        aws_subnet.private_subnet_c.id,
+        aws_subnet.public_subnet_a.id,
+        aws_subnet.public_subnet_b.id,
+        aws_subnet.public_subnet_c.id,
   ]
 
   initial_lifecycle_hook {
@@ -1169,7 +1078,7 @@ resource "aws_sqs_queue" "training_config_queue" {
 
 resource "aws_ecs_task_definition" "training_service_task" {
   family                   = "training-service"
-  network_mode             = "awsvpc"
+  network_mode             = "bridge"
   requires_compatibilities = ["EC2"]
   execution_role_arn       = aws_iam_role.ecs_interface_role.arn
   task_role_arn            = aws_iam_role.ecs_interface_role.arn
@@ -1278,15 +1187,6 @@ resource "aws_ecs_service" "training_service" {
     capacity_provider = aws_ecs_capacity_provider.activations_capacity_provider.name
     weight            = 1
     base              = 0
-  }
-
-  network_configuration {
-    subnets         = [
-      aws_subnet.private_subnet_a.id,
-      aws_subnet.private_subnet_b.id,
-      aws_subnet.private_subnet_c.id,
-    ]
-    security_groups = [aws_security_group.ecs_security_group.id]
   }
 
   deployment_maximum_percent         = 200

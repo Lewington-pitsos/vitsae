@@ -38,6 +38,12 @@ vpc_gateway() {
         }
     }
     ' "$file"
+
+    if tail -n 1 "$file" | grep -q "amazonaws.com"; then
+        return 0
+    else
+        return 1
+    fi
 }
 
 # Check the traceroute output
