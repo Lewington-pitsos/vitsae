@@ -8,13 +8,13 @@ from vitact.utils import load_config
 
 def build_configs(output_filename=None):
     baseline =        {
-        "wandb_project": "CLIP-ViT-L-14-laion2B-s32B-b82K",
+        "wandb_project": "ViT-L-14-laion2B-s32B-b82K",
         "data_bucket": "sae-activations",
         "log_bucket": "sae-activations",
         "n_feats": 65536,
         "batch_size": 32896,
         "k": 32,
-        "lr": 0.001,
+        "lr": 0.0004,
         # "lr": 0.00009,
         "d_in": 1024,
         "seq_len": 257,
@@ -31,8 +31,7 @@ def build_configs(output_filename=None):
     }
 
     all_configs = []
-    # locations = ['2_resid', '5_resid', '8_resid', '11_resid', '14_resid', '17_resid', '20_resid', '22_resid']
-    locations = ['20_resid']
+    locations = ['2_resid', '5_resid', '8_resid', '11_resid', '14_resid', '17_resid', '20_resid', '22_resid']
 
     for location in locations:
         clone = baseline.copy()

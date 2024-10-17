@@ -18,7 +18,7 @@ resource "aws_vpc" "ml_vpc" {
 # Create Subnets
 resource "aws_subnet" "public_subnet_a" {
   vpc_id                  = aws_vpc.ml_vpc.id
-  cidr_block              = "10.0.1.0/24"
+  cidr_block              = "10.0.10.0/24"
   availability_zone       = "${var.region}a"
   map_public_ip_on_launch = true
 
@@ -29,7 +29,7 @@ resource "aws_subnet" "public_subnet_a" {
 
 resource "aws_subnet" "public_subnet_b" {
   vpc_id                  = aws_vpc.ml_vpc.id
-  cidr_block              = "10.0.5.0/24"
+  cidr_block              = "10.0.11.0/24"
   availability_zone       = "${var.region}b"
   map_public_ip_on_launch = true
 
@@ -40,7 +40,7 @@ resource "aws_subnet" "public_subnet_b" {
 
 resource "aws_subnet" "public_subnet_c" {
   vpc_id                  = aws_vpc.ml_vpc.id
-  cidr_block              = "10.0.6.0/24"
+  cidr_block              = "10.0.12.0/24"
   availability_zone       = "${var.region}c"
   map_public_ip_on_launch = true
 
@@ -49,9 +49,9 @@ resource "aws_subnet" "public_subnet_c" {
   }
 }
 
-resource "aws_subnet" "private_subnet" {
+resource "aws_subnet" "private_subnet_a" {
   vpc_id                  = aws_vpc.ml_vpc.id
-  cidr_block              = "10.0.2.0/24"
+  cidr_block              = "10.0.13.0/24"
   availability_zone       = "${var.region}a"
   map_public_ip_on_launch = true
 
@@ -62,7 +62,7 @@ resource "aws_subnet" "private_subnet" {
 
 resource "aws_subnet" "private_subnet_b" {
   vpc_id                  = aws_vpc.ml_vpc.id
-  cidr_block              = "10.0.3.0/24"
+  cidr_block              = "10.0.14.0/24"
   availability_zone       = "${var.region}b"
   map_public_ip_on_launch = true
 
@@ -73,7 +73,7 @@ resource "aws_subnet" "private_subnet_b" {
 
 resource "aws_subnet" "private_subnet_c" {
   vpc_id                  = aws_vpc.ml_vpc.id
-  cidr_block              = "10.0.4.0/24"
+  cidr_block              = "10.0.15.0/24"
   availability_zone       = "${var.region}c"
   map_public_ip_on_launch = true
 
@@ -83,6 +83,7 @@ resource "aws_subnet" "private_subnet_c" {
 }
 
 # Create Internet Gateway
+# resource "aws_egress_only_internet_gateway" "example" {
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.ml_vpc.id
 
@@ -156,11 +157,7 @@ resource "aws_vpc_endpoint" "s3_endpoint" {
   service_name      = "com.amazonaws.${var.region}.s3"
   vpc_endpoint_type = "Gateway"
 
-  route_table_ids = [
-    aws_route_table.private_rt_a.id,
-    aws_route_table.private_rt_b.id,
-    aws_route_table.private_rt_c.id,
-  ]
+  route_table_ids = [aws_route_table.private_rt.id]
 
   tags = {
     Name = "${var.environment}-s3-endpoint"
