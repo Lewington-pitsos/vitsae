@@ -156,7 +156,11 @@ resource "aws_vpc_endpoint" "s3_endpoint" {
   service_name      = "com.amazonaws.${var.region}.s3"
   vpc_endpoint_type = "Gateway"
 
-  route_table_ids = [aws_route_table.private_rt.id]
+  route_table_ids = [
+    aws_route_table.private_rt_a.id,
+    aws_route_table.private_rt_b.id,
+    aws_route_table.private_rt_c.id,
+  ]
 
   tags = {
     Name = "${var.environment}-s3-endpoint"
