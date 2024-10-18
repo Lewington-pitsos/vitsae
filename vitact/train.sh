@@ -1,3 +1,5 @@
+python3.11 -m pip show sache
+
 set -e
 
 nvidia-smi
