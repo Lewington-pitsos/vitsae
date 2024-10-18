@@ -237,11 +237,20 @@ if __name__ == '__main__':
         # 's3://sae-activations/log/CLIP-ViT-L-14/5_resid/5_resid_79d8c9/600023040.pt',
         # 's3://sae-activations/log/CLIP-ViT-L-14/8_resid/8_resid_9a2c60/600023040.pt',
 
-        's3://sae-activations/log/CLIP-ViT-L-14-laion2B-s32B-b82K/17_resid/17_resid-2f8c464c/957076224.pt',
-        's3://sae-activations/log/CLIP-ViT-L-14-laion2B-s32B-b82K/2_resid/2_resid-84382bb6/957076224.pt',
+        # 's3://sae-activations/log/CLIP-ViT-L-14-laion2B-s32B-b82K/17_resid/17_resid-2f8c464c/957076224.pt',
+        # 's3://sae-activations/log/CLIP-ViT-L-14-laion2B-s32B-b82K/2_resid/2_resid-84382bb6/957076224.pt',
+
+    's3://sae-activations/log/CLIP-ViT-L-14-laion2B-s32B-b82K/11_resid/11_resid-a3ff8172/1200013184.pt',
+    's3://sae-activations/log/CLIP-ViT-L-14-laion2B-s32B-b82K/14_resid/14_resid-929785c8/1200013184.pt',
+    's3://sae-activations/log/CLIP-ViT-L-14-laion2B-s32B-b82K/17_resid/17_resid-64a85daa/1200013184.pt',
+    's3://sae-activations/log/CLIP-ViT-L-14-laion2B-s32B-b82K/20_resid/20_resid-425b3aff/1200013184.pt',
+    's3://sae-activations/log/CLIP-ViT-L-14-laion2B-s32B-b82K/22_resid/22_resid-3a4511bd/1200013184.pt',
+    's3://sae-activations/log/CLIP-ViT-L-14-laion2B-s32B-b82K/2_resid/2_resid-7099b0a5/1200013184.pt',
+    's3://sae-activations/log/CLIP-ViT-L-14-laion2B-s32B-b82K/5_resid/5_resid-5bc68e18/1200013184.pt',
+    's3://sae-activations/log/CLIP-ViT-L-14-laion2B-s32B-b82K/8_resid/8_resid-e2dd7f23/1200013184.pt',
     ]
 
-    image_dir = '../cruft/top9'
+    image_dir = '../cruft/top9-137'
 
     if os.path.exists(image_dir):
         raise ValueError(f"Output directory {image_dir} already exists. Please remove it before running this script.")
@@ -255,7 +264,7 @@ if __name__ == '__main__':
 
     if not os.path.exists(laion_img_dir):
         download_laion(
-            n_urls=700_000,
+            n_urls=800_000,
             processes_count=16,
             thread_count=32,
             image_size=224,
@@ -266,14 +275,14 @@ if __name__ == '__main__':
         print(f"Skipping download of images to {laion_img_dir} as the directory already exists.")
 
     sae_paths = download_sae_checkpoints(sae_checkpoints, base_dir=base_dir)
+    batch_size = 384
 
     ds = PILDataset(laion_img_dir)
-    batch_size = 384
     dataloader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=3, collate_fn=lambda x: [[y[0] for y in x], [y[1] for y in x]])
 
     generate_latents(
         sae_paths=sae_paths,
-        n_activations=500_000,
+        n_activations=550_000,
         dataloader=dataloader,
         batch_size=batch_size,
         num_top=9,  # Number of top activations to keep
@@ -281,4 +290,24 @@ if __name__ == '__main__':
         image_dir=image_dir,
         n_features=1024, # Specify the number of features you want to process
         pos_idx=137
+    )
+
+
+    print('finished first run ------------------>')
+
+    ds = PILDataset(laion_img_dir)
+    dataloader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=3, collate_fn=lambda x: [[y[0] for y in x], [y[1] for y in x]])
+
+    img_dir2 = 'cruft/top9-0'
+
+    generate_latents(
+        sae_paths=sae_paths,
+        n_activations=550_000,
+        dataloader=dataloader,
+        batch_size=batch_size,
+        num_top=9,  # Number of top activations to keep
+        device='cuda',
+        image_dir=img_dir2,
+        n_features=1024, # Specify the number of features you want to process
+        pos_idx=0
     )
