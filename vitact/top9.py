@@ -72,6 +72,7 @@ def generate_latents(
     firing_freq_dict = {}
     cumulative_file_paths = []
     cumulative_index = 0
+    first_25_thousand_latents = {}
 
     with torch.no_grad():
         for i, (paths, batch) in tqdm(enumerate(dataloader), total=n_activations // batch_size):
@@ -88,7 +89,7 @@ def generate_latents(
 
             cumulative_file_paths.extend(paths)
 
-            for location in locations:
+            for loc_idx, location in enumerate(locations):
                 layer, hook_name = location
                 sae = sae_dict[location]
                 activation = activations[location] # (batch_size, seq_len, num_features)
@@ -106,7 +107,6 @@ def generate_latents(
                 else:
                     activation = activation[:, pos_idx]
                     latent = sae.forward_descriptive(activation)['latent']
-
 
                 if location not in num_features_dict:
                     actual_num_features = latent.size(1)
@@ -139,6 +139,11 @@ def generate_latents(
 
                 topk_global_indices = torch.gather(total_indices, 1, indices_in_total)
                 topk_indices_dict[location] = topk_global_indices
+
+                if location not in first_25_thousand_latents:
+                    first_25_thousand_latents[location] = latent
+                elif first_25_thousand_latents[location].size(0) < 25_000:
+                    first_25_thousand_latents[location] = torch.cat((first_25_thousand_latents[location], latent), dim=0)
 
             if (i + 1) * batch_size >= n_activations:
                 for location in locations:
@@ -186,6 +191,8 @@ def generate_latents(
                 result = {
                     'indices': indices,
                     'values': values,
+                    'latent_values': (first_25_thousand_latents[location][:, feature_idx] > 0).nonzero().squeeze().tolist(),
+                    'all_indices_gt_0': (latent > 0).sum(dim=0).tolist(),
                     'file_paths': file_paths
                 }
 
@@ -262,6 +269,7 @@ if __name__ == '__main__':
 
     laion_img_dir = '../cruft/bench'
 
+    n_features = 2048
     if not os.path.exists(laion_img_dir):
         download_laion(
             n_urls=800_000,
@@ -288,7 +296,7 @@ if __name__ == '__main__':
         num_top=9,  # Number of top activations to keep
         device='cuda',
         image_dir=image_dir,
-        n_features=1024, # Specify the number of features you want to process
+        n_features=n_features, # Specify the number of features you want to process
         pos_idx=137
     )
 
@@ -308,6 +316,6 @@ if __name__ == '__main__':
         num_top=9,  # Number of top activations to keep
         device='cuda',
         image_dir=img_dir2,
-        n_features=1024, # Specify the number of features you want to process
+        n_features=n_features, # Specify the number of features you want to process
         pos_idx=0
     )
