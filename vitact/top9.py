@@ -169,7 +169,8 @@ def generate_latents(
             stats = {
                 'num_features': num_features,
                 'n_samples': i * batch_size,
-                'firing_freq': firing_freq.tolist()
+                'firing_freq': firing_freq.tolist(),
+                'first_25000_file_paths': cumulative_file_paths[:25_000] 
             }
 
             with open(os.path.join(layer_dir, 'stats.json'), 'w') as f:
@@ -191,8 +192,7 @@ def generate_latents(
                 result = {
                     'indices': indices,
                     'values': values,
-                    'latent_values': (first_25_thousand_latents[location][:, feature_idx] > 0).nonzero().squeeze().tolist(),
-                    'all_indices_gt_0': (latent > 0).sum(dim=0).tolist(),
+                    'active_images_from_first_25000': (first_25_thousand_latents[location][:, feature_idx] > 0).nonzero().squeeze().tolist(),
                     'file_paths': file_paths
                 }
 
@@ -286,7 +286,7 @@ if __name__ == '__main__':
     batch_size = 384
 
     ds = PILDataset(laion_img_dir)
-    dataloader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=3, collate_fn=lambda x: [[y[0] for y in x], [y[1] for y in x]])
+    dataloader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=1, collate_fn=lambda x: [[y[0] for y in x], [y[1] for y in x]])
 
     generate_latents(
         sae_paths=sae_paths,
@@ -304,7 +304,7 @@ if __name__ == '__main__':
     print('finished first run ------------------>')
 
     ds = PILDataset(laion_img_dir)
-    dataloader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=3, collate_fn=lambda x: [[y[0] for y in x], [y[1] for y in x]])
+    dataloader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=1, collate_fn=lambda x: [[y[0] for y in x], [y[1] for y in x]])
 
     img_dir2 = 'cruft/top9-0'
 
