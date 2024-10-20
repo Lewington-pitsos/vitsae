@@ -89,7 +89,7 @@ def generate_latents(
 
             cumulative_file_paths.extend(paths)
 
-            for loc_idx, location in enumerate(locations):
+            for location in locations:
                 layer, hook_name = location
                 sae = sae_dict[location]
                 activation = activations[location] # (batch_size, seq_len, num_features)
